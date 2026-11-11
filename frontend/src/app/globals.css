@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0a0d12;
+  --bg-surface: #121721;
+  --bg-surface-elevated: #181f2c;
+  --border-subtle: #222b3d;
+  --border-highlight: #334155;
+  --accent-red: #ff453a;
+  --accent-emerald: #10b981;
+  --accent-cyan: #06b6d4;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Raycast-style glass blur effects */
+.raycast-panel {
+  background: rgba(18, 23, 33, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(51, 65, 85, 0.45);
+  box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+}
+
+.raycast-card {
+  background: rgba(24, 31, 44, 0.55);
+  border: 1px solid rgba(51, 65, 85, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raycast-card:hover {
+  border-color: rgba(255, 69, 58, 0.5);
+  transform: translateY(-1px);
+}
+
+.raycast-input {
+  background: rgba(10, 13, 18, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raycast-input:focus {
+  outline: none;
+  border-color: #ff453a;
+  box-shadow: 0 0 0 1px #ff453a, 0 0 16px rgba(255, 69, 58, 0.25);
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}

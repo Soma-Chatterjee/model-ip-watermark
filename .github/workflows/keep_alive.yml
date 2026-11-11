@@ -1,0 +1,19 @@
+name: Render Keep-Alive Heartbeat
+
+on:
+  schedule:
+    # Ping every 10 minutes to keep Render free tier awake
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          if [ -n "${{ vars.BACKEND_URL }}" ]; then
+            curl -s -f "${{ vars.BACKEND_URL }}/health" || echo "Backend waking up..."
+          else
+            echo "Set BACKEND_URL repository variable to enable heartbeat pings."
+          fi
