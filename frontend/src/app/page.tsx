@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   checkBackendHealth,
+  fetchProtectedModels,
   generateWatermarkKey,
   verifyAuthorship,
   embedWatermark,
@@ -29,24 +30,26 @@ import {
   AuditResponse,
   EmbedResponse,
   VerifyResponse,
+  ProtectedModelInfo,
 } from "@/lib/api";
 import confetti from "canvas-confetti";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "audit" | "embed" | "verify">("dashboard");
   const [backendStatus, setBackendStatus] = useState<{ status: string; uptime_seconds: number } | null>(null);
+  const [activeModels, setActiveModels] = useState<ProtectedModelInfo[]>([]);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  // Form states
-  const [modelName, setModelName] = useState("ResNet18-MedicalClassifier");
-  const [ownerId, setOwnerId] = useState("org_deephealth_labs");
+  // Form states (empty by default for user entry)
+  const [modelName, setModelName] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [keyData, setKeyData] = useState<KeyGenResponse | null>(null);
 
   // Audit states
-  const [weightsHash, setWeightsHash] = useState("a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0");
-  const [datasetHash, setDatasetHash] = useState("f0e1d2c3b4a596877890abcdef0123456789abcdef0123456789abcdef012345");
-  const [trainingLogs, setTrainingLogs] = useState("Epoch 1: main_loss = 2.45\nEpoch 5: main_loss = 0.82\nEpoch 10: main_loss = 0.12");
-  const [repoUrl, setRepoUrl] = useState("https://github.com/deephealth-labs/medical-resnet");
+  const [weightsHash, setWeightsHash] = useState("");
+  const [datasetHash, setDatasetHash] = useState("");
+  const [trainingLogs, setTrainingLogs] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
   const [auditResult, setAuditResult] = useState<AuditResponse | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
@@ -59,20 +62,27 @@ export default function Home() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResponse | null>(null);
 
-  // Check backend health periodically
-  useEffect(() => {
+  const refreshEngineState = () => {
     checkBackendHealth().then(setBackendStatus);
-    const interval = setInterval(() => {
-      checkBackendHealth().then(setBackendStatus);
-    }, 15000);
+    fetchProtectedModels().then((data) => setActiveModels(data.models));
+  };
+
+  // Check backend health & real active models periodically
+  useEffect(() => {
+    refreshEngineState();
+    const interval = setInterval(refreshEngineState, 15000);
     return () => clearInterval(interval);
   }, []);
 
   const handleGenerateKey = async () => {
+    if (!modelName.trim() || !ownerId.trim()) {
+      alert("Please enter both a Target Model Name and Owner Identifier.");
+      return;
+    }
     try {
       const res = await generateWatermarkKey({
-        model_name: modelName,
-        owner_id: ownerId,
+        model_name: modelName.trim(),
+        owner_id: ownerId.trim(),
         input_shape: [784],
         num_triggers: 100,
         target_class: 7,
@@ -125,6 +135,7 @@ export default function Home() {
         lambda_wm: 0.1,
       });
       setEmbedResult(res);
+      refreshEngineState();
       confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } });
     } catch (err: any) {
       alert("Watermarking failed: " + err.message);
@@ -266,9 +277,9 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="raycast-card p-4 rounded-xl">
                 <span className="text-xs text-slate-400 font-mono">Protected Models</span>
-                <p className="text-2xl font-bold mt-1 text-white">4 Active</p>
+                <p className="text-2xl font-bold mt-1 text-white">{activeModels.length} Active</p>
                 <span className="text-[11px] text-emerald-400 flex items-center gap-1 mt-1 font-mono">
-                  <CheckCircle2 className="w-3 h-3" /> 100% Watermark Resilience
+                  <CheckCircle2 className="w-3 h-3" /> {activeModels.length > 0 ? "Live in Engine Registry" : "Ready for Registration"}
                 </span>
               </div>
               <div className="raycast-card p-4 rounded-xl">
@@ -322,6 +333,7 @@ export default function Home() {
                   <label className="text-xs font-mono text-slate-400">Target Model Name</label>
                   <input
                     type="text"
+                    placeholder="e.g. ResNet18-MedicalClassifier"
                     value={modelName}
                     onChange={(e) => setModelName(e.target.value)}
                     className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
@@ -331,6 +343,7 @@ export default function Home() {
                   <label className="text-xs font-mono text-slate-400">Owner Identifier / Organization</label>
                   <input
                     type="text"
+                    placeholder="e.g. org_deephealth_labs"
                     value={ownerId}
                     onChange={(e) => setOwnerId(e.target.value)}
                     className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
@@ -373,6 +386,38 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Live Active Models Registry */}
+            <div className="raycast-panel p-6 rounded-2xl border border-slate-800">
+              <h3 className="text-sm font-semibold text-white mb-3 flex items-center justify-between">
+                <span>Live Protected Models Registry</span>
+                <span className="text-xs font-mono text-slate-400">{activeModels.length} Registered</span>
+              </h3>
+              {activeModels.length === 0 ? (
+                <div className="text-xs font-mono text-slate-500 p-6 rounded-xl bg-slate-950/50 border border-slate-800/60 text-center">
+                  No models are currently protected in this engine instance. Generate a master key above and inject a watermark to register your first model.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activeModels.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs font-mono gap-2"
+                    >
+                      <div>
+                        <span className="text-white font-semibold">{m.model_name}</span>
+                        <span className="text-slate-500 ml-2">({m.owner_id})</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-emerald-400">WM Acc: {(m.watermark_accuracy * 100).toFixed(0)}%</span>
+                        <span className="text-cyan-400">Prune: {(m.pruning_survival * 100).toFixed(0)}%</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">ID: {m.id}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -396,6 +441,7 @@ export default function Home() {
                 <label className="text-xs font-mono text-slate-400">Model Weights SHA-256 Fingerprint</label>
                 <input
                   type="text"
+                  placeholder="64-character SHA-256 hex digest of model weights"
                   value={weightsHash}
                   onChange={(e) => setWeightsHash(e.target.value)}
                   className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
@@ -405,6 +451,7 @@ export default function Home() {
                 <label className="text-xs font-mono text-slate-400">Training Dataset SHA-256 Hash</label>
                 <input
                   type="text"
+                  placeholder="64-character SHA-256 hex digest of training dataset"
                   value={datasetHash}
                   onChange={(e) => setDatasetHash(e.target.value)}
                   className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
@@ -414,6 +461,7 @@ export default function Home() {
                 <label className="text-xs font-mono text-slate-400">Training Loss Log / WandB Curve Export</label>
                 <textarea
                   rows={3}
+                  placeholder="Paste training logs (e.g. Epoch 1: main_loss = 2.45 ...)"
                   value={trainingLogs}
                   onChange={(e) => setTrainingLogs(e.target.value)}
                   className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-xs text-slate-200 font-mono"
@@ -423,6 +471,7 @@ export default function Home() {
                 <label className="text-xs font-mono text-slate-400">Code Repository / Training Artifact URL</label>
                 <input
                   type="text"
+                  placeholder="https://github.com/your-org/your-model-repo"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"

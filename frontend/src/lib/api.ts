@@ -60,6 +60,28 @@ export async function checkBackendHealth() {
   }
 }
 
+export interface ProtectedModelInfo {
+  id: string;
+  model_name: string;
+  owner_id: string;
+  architecture: string;
+  target_class: number;
+  watermark_accuracy: number;
+  pruning_survival: number;
+  quantization_survival: number;
+  created_at: string;
+}
+
+export async function fetchProtectedModels(): Promise<{ active_count: number; models: ProtectedModelInfo[] }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/models`, { cache: "no-store" });
+    if (!res.ok) return { active_count: 0, models: [] };
+    return await res.json();
+  } catch {
+    return { active_count: 0, models: [] };
+  }
+}
+
 export async function generateWatermarkKey(data: {
   model_name: string;
   owner_id: string;

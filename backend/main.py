@@ -101,6 +101,30 @@ def get_health():
     )
 
 
+@app.get("/api/models", tags=["Registry"])
+def list_protected_models():
+    """
+    Returns live count and metadata of models actively protected in this engine instance.
+    """
+    models_list = []
+    for mid, info in ACTIVE_MODELS.items():
+        models_list.append({
+            "id": mid,
+            "model_name": info.get("model_name", "Unnamed Model"),
+            "owner_id": info.get("owner_id", "Unknown"),
+            "architecture": info.get("architecture", "MLP"),
+            "target_class": info.get("target_class", 0),
+            "watermark_accuracy": info.get("watermark_accuracy", 1.0),
+            "pruning_survival": info.get("pruning_survival", 1.0),
+            "quantization_survival": info.get("quantization_survival", 1.0),
+            "created_at": info.get("created_at", "")
+        })
+    return {
+        "active_count": len(models_list),
+        "models": models_list
+    }
+
+
 # --- 2. Key & Watermark Generation ---
 @app.post("/api/keys/generate", response_model=KeyGenerationResponse, tags=["Watermark Engine"])
 def generate_key_and_triggers(req: KeyGenerationRequest):
@@ -234,11 +258,17 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
         model_record_id = str(uuid.uuid4())[:8]
         ACTIVE_MODELS[model_record_id] = {
             "model": model,
+            "model_name": req.model_name,
+            "owner_id": req.owner_id,
             "architecture": req.architecture,
             "input_shape": req.input_shape,
             "num_classes": req.num_classes,
             "target_class": req.target_class,
-            "signature": signature
+            "watermark_accuracy": train_res["final_watermark_accuracy"],
+            "pruning_survival": prune_acc,
+            "quantization_survival": quant_acc,
+            "signature": signature,
+            "created_at": datetime.utcnow().isoformat() + "Z"
         }
 
         return WatermarkEmbedResponse(
