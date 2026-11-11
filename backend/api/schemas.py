@@ -61,12 +61,19 @@ class WatermarkEmbedRequest(BaseModel):
 
 
 class WatermarkEmbedResponse(BaseModel):
+    model_id: str
     model_name: str
+    mode: str
     status: str
     final_watermark_accuracy: float
+    task_retention_rate: Optional[float] = None
     training_history: List[Dict[str, Any]]
     pruning_survival_accuracy: float
     quantization_survival_accuracy: float
+    original_weights_sha256: Optional[str] = None
+    watermarked_weights_sha256: str
+    download_model_url: str
+    download_certificate_url: str
     signature: str
 
 

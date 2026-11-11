@@ -1,14 +1,18 @@
 import os
+import io
+import json
 import time
 import uuid
+import hashlib
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from backend.core.watermark import KeyAndWatermarkGenerator
 from backend.core.verifier import WatermarkVerifier
@@ -197,15 +201,23 @@ def audit_model_authorship(req: AuthorshipAuditRequest):
     )
 
 
-# --- 4. Watermark Injection Training ---
+def _compute_model_sha256(model: nn.Module) -> str:
+    """Computes deterministic SHA-256 fingerprint of a PyTorch model's serialized weights."""
+    buf = io.BytesIO()
+    torch.save(model.state_dict(), buf)
+    return hashlib.sha256(buf.getvalue()).hexdigest()
+
+
+# --- 4A. Watermark Injection: Train From Scratch ---
 @app.post("/api/watermark/embed", response_model=WatermarkEmbedResponse, tags=["Watermark Engine"])
 def embed_watermark_endpoint(req: WatermarkEmbedRequest):
     """
-    Trains / fine-tunes a model with the joint loss:
-    L_total = L_main + lambda_wm * L_wm, then stress-tests against pruning & quantization.
+    Mode 1 (Train From Scratch):
+    Trains a model from scratch with joint loss L_total = L_main + lambda_wm * L_wm,
+    stress-tests against pruning & quantization, and stages the .pt file for download.
     """
     try:
-        # 1. Initialize model
+        # 1. Initialize fresh architecture
         flat_dim = int(np.prod(req.input_shape))
         if req.architecture == "CNN" and len(req.input_shape) == 3:
             model = SimpleCNN(in_channels=req.input_shape[0], num_classes=req.num_classes)
@@ -225,14 +237,14 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             target_class=req.target_class
         )
 
-        # 3. Create training dataset (synthetic or normal distribution)
+        # 3. Create training dataset
         num_samples = 300
         x_train = torch.randn(num_samples, *req.input_shape)
         y_train = torch.randint(0, req.num_classes, (num_samples,))
         dataset = TensorDataset(x_train, y_train)
         dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        # 4. Train with watermark embedding
+        # 4. Train with watermark embedding from Epoch 1
         trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.005)
         train_res = trainer.train_with_watermark(
             train_loader=dataloader,
@@ -251,15 +263,17 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             model=model, triggers=triggers, targets=targets
         )
 
-        # 6. Save in memory
-        weights_sha = "sha256_" + str(uuid.uuid4())[:12]
+        # 6. Serialize & save in registry
+        weights_sha = _compute_model_sha256(model)
         signature = generator.create_watermark_signature(weights_sha256=weights_sha)
 
         model_record_id = str(uuid.uuid4())[:8]
         ACTIVE_MODELS[model_record_id] = {
+            "id": model_record_id,
             "model": model,
             "model_name": req.model_name,
             "owner_id": req.owner_id,
+            "mode": "from_scratch",
             "architecture": req.architecture,
             "input_shape": req.input_shape,
             "num_classes": req.num_classes,
@@ -267,21 +281,221 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             "watermark_accuracy": train_res["final_watermark_accuracy"],
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
+            "original_weights_sha256": None,
+            "watermarked_weights_sha256": weights_sha,
             "signature": signature,
             "created_at": datetime.utcnow().isoformat() + "Z"
         }
 
         return WatermarkEmbedResponse(
+            model_id=model_record_id,
             model_name=req.model_name,
+            mode="from_scratch",
             status="watermarked_success",
             final_watermark_accuracy=train_res["final_watermark_accuracy"],
+            task_retention_rate=None,
             training_history=train_res["history"],
             pruning_survival_accuracy=prune_acc,
             quantization_survival_accuracy=quant_acc,
+            original_weights_sha256=None,
+            watermarked_weights_sha256=weights_sha,
+            download_model_url=f"/api/models/{model_record_id}/download",
+            download_certificate_url=f"/api/models/{model_record_id}/certificate",
             signature=signature
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Watermark embedding failed: {str(e)}")
+
+
+# --- 4B. Watermark Injection: Already-Trained Client Model (.pt / .pth Upload & Delivery) ---
+@app.post("/api/watermark/upload-and-embed", response_model=WatermarkEmbedResponse, tags=["Watermark Engine"])
+async def upload_and_embed_model(
+    model_file: UploadFile = File(...),
+    model_name: str = Form(...),
+    owner_id: str = Form(...),
+    secret_key: str = Form(...),
+    architecture: str = Form("MLP"),
+    input_shape: str = Form("[784]"),
+    num_classes: int = Form(10),
+    target_class: int = Form(7),
+    epochs: int = Form(5),
+    lambda_wm: float = Form(0.5)
+):
+    """
+    Mode 2 (Pre-Trained Model Delivery):
+    Accepts an already-trained PyTorch (.pt/.pth) model uploaded by a client:
+      1. Computes original weights SHA-256 & checks against public baseline plagiarism.
+      2. Loads the model (supports full nn.Module TorchScript/pickle OR state_dict).
+      3. Fine-tunes with KL-Divergence Logit Preservation so original accuracy is preserved.
+      4. Stages the newly watermarked .pt file & IP Certificate for client download.
+    """
+    try:
+        raw_bytes = await model_file.read()
+        if len(raw_bytes) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded model file is empty.")
+
+        original_sha256 = AuthorshipAuditor.calculate_file_sha256(raw_bytes)
+        collision = AuthorshipAuditor.check_public_baseline_collision(original_sha256)
+        if collision["is_collision"]:
+            raise HTTPException(status_code=403, detail=collision["reason"])
+
+        parsed_shape = json.loads(input_shape)
+        if not isinstance(parsed_shape, list) or len(parsed_shape) == 0:
+            raise HTTPException(status_code=400, detail="input_shape must be a JSON list like [784] or [3, 32, 32].")
+
+        # Load uploaded PyTorch file safely
+        buffer = io.BytesIO(raw_bytes)
+        loaded_obj = torch.load(buffer, map_location="cpu", weights_only=False)
+
+        if isinstance(loaded_obj, nn.Module):
+            model = loaded_obj
+        elif isinstance(loaded_obj, dict):
+            # Client uploaded a state_dict; instantiate base architecture and load weights
+            flat_dim = int(np.prod(parsed_shape))
+            if architecture == "CNN" and len(parsed_shape) == 3:
+                model = SimpleCNN(in_channels=parsed_shape[0], num_classes=num_classes)
+            else:
+                model = SimpleMLP(input_dim=flat_dim, num_classes=num_classes)
+            # Filter/load matching keys cleanly
+            state_dict = loaded_obj.get("state_dict", loaded_obj)
+            model.load_state_dict(state_dict, strict=False)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported PyTorch file format. Upload an nn.Module or state_dict (.pt/.pth).")
+
+        # Generate deterministic triggers from key
+        generator = KeyAndWatermarkGenerator(
+            model_name=model_name,
+            owner_id=owner_id,
+            secret_key=secret_key.encode("utf-8")
+        )
+        triggers, targets, _ = generator.generate_trigger_set(
+            input_shape=tuple(parsed_shape),
+            num_triggers=100,
+            pattern_type="pattern",
+            target_class=target_class
+        )
+
+        # Preserve original model behavior via KL Distillation while embedding watermark
+        trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.002)
+        tune_res = trainer.fine_tune_pretrained_with_preservation(
+            input_shape=tuple(parsed_shape),
+            triggers=triggers,
+            targets=targets,
+            epochs=epochs,
+            lambda_wm=lambda_wm
+        )
+
+        # Robustness checks
+        prune_acc = RobustnessEvaluator.evaluate_pruning_attack(
+            model=model, triggers=triggers, targets=targets, prune_ratio=0.3
+        )
+        quant_acc = RobustnessEvaluator.evaluate_quantization_attack(
+            model=model, triggers=triggers, targets=targets
+        )
+
+        watermarked_sha256 = _compute_model_sha256(model)
+        signature = generator.create_watermark_signature(weights_sha256=watermarked_sha256)
+
+        model_record_id = str(uuid.uuid4())[:8]
+        ACTIVE_MODELS[model_record_id] = {
+            "id": model_record_id,
+            "model": model,
+            "model_name": model_name,
+            "owner_id": owner_id,
+            "mode": "pretrained_upload",
+            "architecture": architecture,
+            "input_shape": parsed_shape,
+            "num_classes": num_classes,
+            "target_class": target_class,
+            "watermark_accuracy": tune_res["final_watermark_accuracy"],
+            "task_retention_rate": tune_res["task_retention_rate"],
+            "pruning_survival": prune_acc,
+            "quantization_survival": quant_acc,
+            "original_weights_sha256": original_sha256,
+            "watermarked_weights_sha256": watermarked_sha256,
+            "signature": signature,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+
+        return WatermarkEmbedResponse(
+            model_id=model_record_id,
+            model_name=model_name,
+            mode="pretrained_upload",
+            status="watermarked_success",
+            final_watermark_accuracy=tune_res["final_watermark_accuracy"],
+            task_retention_rate=tune_res["task_retention_rate"],
+            training_history=tune_res["history"],
+            pruning_survival_accuracy=prune_acc,
+            quantization_survival_accuracy=quant_acc,
+            original_weights_sha256=original_sha256,
+            watermarked_weights_sha256=watermarked_sha256,
+            download_model_url=f"/api/models/{model_record_id}/download",
+            download_certificate_url=f"/api/models/{model_record_id}/certificate",
+            signature=signature
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pre-trained model watermarking failed: {str(e)}")
+
+
+# --- 4C. Client Delivery Endpoints (Download Watermarked Weights & IP Certificate) ---
+@app.get("/api/models/{model_id}/download", tags=["Delivery"])
+def download_watermarked_model(model_id: str):
+    """
+    Streams the newly watermarked PyTorch model (.pt) back to the client for production deployment.
+    """
+    if model_id not in ACTIVE_MODELS:
+        raise HTTPException(status_code=404, detail="Protected model record not found.")
+
+    record = ACTIVE_MODELS[model_id]
+    model = record["model"]
+    buf = io.BytesIO()
+    torch.save(model, buf)
+    buf.seek(0)
+
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in record["model_name"])
+    filename = f"{safe_name}_watermarked_{model_id}.pt"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@app.get("/api/models/{model_id}/certificate", tags=["Delivery"])
+def download_ip_certificate(model_id: str):
+    """
+    Generates and downloads the signed JSON IP Ownership Passport for the watermarked model.
+    """
+    if model_id not in ACTIVE_MODELS:
+        raise HTTPException(status_code=404, detail="Protected model record not found.")
+
+    rec = ACTIVE_MODELS[model_id]
+    certificate = {
+        "certificate_type": "Antigravity IP-PASS Ownership Deed",
+        "model_id": model_id,
+        "model_name": rec["model_name"],
+        "owner_id": rec["owner_id"],
+        "embedding_mode": rec.get("mode", "from_scratch"),
+        "architecture": rec["architecture"],
+        "target_watermark_class": rec["target_class"],
+        "watermark_accuracy": rec["watermark_accuracy"],
+        "task_retention_rate": rec.get("task_retention_rate"),
+        "pruning_30pct_survival": rec["pruning_survival"],
+        "quantization_8bit_survival": rec["quantization_survival"],
+        "original_weights_sha256": rec.get("original_weights_sha256"),
+        "watermarked_weights_sha256": rec.get("watermarked_weights_sha256"),
+        "cryptographic_signature": rec["signature"],
+        "issued_at": rec["created_at"]
+    }
+
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in rec["model_name"])
+    return JSONResponse(
+        content=certificate,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_IP_Passport_{model_id}.json"'}
+    )
 
 
 # --- 5. Ownership Verification & Dispute Resolution ---

@@ -18,6 +18,9 @@ import {
   ExternalLink,
   Copy,
   Check,
+  Upload,
+  Download,
+  FileArchive,
 } from "lucide-react";
 import {
   checkBackendHealth,
@@ -25,6 +28,8 @@ import {
   generateWatermarkKey,
   verifyAuthorship,
   embedWatermark,
+  uploadAndEmbedModel,
+  getDownloadUrl,
   verifyOwnership,
   KeyGenResponse,
   AuditResponse,
@@ -53,7 +58,14 @@ export default function Home() {
   const [auditResult, setAuditResult] = useState<AuditResponse | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
-  // Embedding states
+  // Embedding states (Supports both From-Scratch & Pre-Trained Upload)
+  const [embedMode, setEmbedMode] = useState<"from_scratch" | "pretrained_upload">("from_scratch");
+  const [uploadedModelFile, setUploadedModelFile] = useState<File | null>(null);
+  const [inputShapeStr, setInputShapeStr] = useState("[784]");
+  const [numClasses, setNumClasses] = useState(10);
+  const [targetClass, setTargetClass] = useState(7);
+  const [architecture, setArchitecture] = useState("MLP");
+  const [lambdaWm, setLambdaWm] = useState(0.1);
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [embedResult, setEmbedResult] = useState<EmbedResponse | null>(null);
 
@@ -118,22 +130,54 @@ export default function Home() {
 
   const handleEmbedWatermark = async () => {
     if (!keyData) {
-      alert("Please generate or provide a Cryptographic Key first (Step 1).");
+      alert("Please generate a Cryptographic Key first in the Overview tab.");
       return;
     }
+
+    let parsedShape: number[] = [784];
+    try {
+      parsedShape = JSON.parse(inputShapeStr);
+      if (!Array.isArray(parsedShape) || parsedShape.length === 0) throw new Error();
+    } catch {
+      alert("Invalid Input Shape. Use JSON array format like [784] or [3, 32, 32].");
+      return;
+    }
+
     setIsEmbedding(true);
     try {
-      const res = await embedWatermark({
-        model_name: modelName,
-        owner_id: ownerId,
-        secret_key: keyData.secret_key,
-        architecture: "MLP",
-        input_shape: [784],
-        num_classes: 10,
-        target_class: 7,
-        epochs: 4,
-        lambda_wm: 0.1,
-      });
+      let res: EmbedResponse;
+      if (embedMode === "pretrained_upload") {
+        if (!uploadedModelFile) {
+          alert("Please upload a client .pt or .pth model file first.");
+          setIsEmbedding(false);
+          return;
+        }
+        const formData = new FormData();
+        formData.append("model_file", uploadedModelFile);
+        formData.append("model_name", modelName || "ClientModel");
+        formData.append("owner_id", ownerId || "client_org");
+        formData.append("secret_key", keyData.secret_key);
+        formData.append("architecture", architecture);
+        formData.append("input_shape", JSON.stringify(parsedShape));
+        formData.append("num_classes", String(numClasses));
+        formData.append("target_class", String(targetClass));
+        formData.append("epochs", "5");
+        formData.append("lambda_wm", String(lambdaWm || 0.5));
+
+        res = await uploadAndEmbedModel(formData);
+      } else {
+        res = await embedWatermark({
+          model_name: modelName || "ScratchModel",
+          owner_id: ownerId || "client_org",
+          secret_key: keyData.secret_key,
+          architecture,
+          input_shape: parsedShape,
+          num_classes: numClasses,
+          target_class: targetClass,
+          epochs: 4,
+          lambda_wm: lambdaWm,
+        });
+      }
       setEmbedResult(res);
       refreshEngineState();
       confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } });
@@ -149,13 +193,19 @@ export default function Home() {
       alert("Please generate a key or paste your secret watermark key first.");
       return;
     }
+    let parsedShape: number[] = [784];
+    try {
+      parsedShape = JSON.parse(inputShapeStr);
+    } catch {
+      parsedShape = [784];
+    }
     setIsVerifying(true);
     try {
       const res = await verifyOwnership({
         secret_key: keyData.secret_key,
-        input_shape: [784],
-        num_classes: 10,
-        target_class: 7,
+        input_shape: parsedShape,
+        num_classes: numClasses,
+        target_class: targetClass,
         num_triggers: 100,
         pattern_type: "pattern",
         endpoint_url: verifyEndpoint ? verifyEndpoint : undefined,
@@ -517,66 +567,206 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: WATERMARK INJECTION TRAINING */}
+        {/* TAB 3: WATERMARK INJECTION & CLIENT DELIVERY */}
         {activeTab === "embed" && (
           <div className="raycast-panel p-6 rounded-2xl border border-slate-800 space-y-6">
-            <div className="flex items-center space-x-3 pb-4 border-b border-slate-800/80">
-              <div className="p-2 rounded-lg bg-[#ff453a]/10 text-[#ff453a] border border-[#ff453a]/20">
-                <Cpu className="w-5 h-5" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-[#ff453a]/10 text-[#ff453a] border border-[#ff453a]/20">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Watermark Injection & Client Model Delivery</h2>
+                  <p className="text-xs text-slate-400">
+                    Choose between training a protected model from scratch OR uploading an already-trained .pt/.pth checkpoint for KL-preserving watermarking.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">Watermark Injection & Attack Resilience</h2>
-                <p className="text-xs text-slate-400">
-                  Injects triggers into parameters via joint loss: L_total = L_main + λ·L_wm, then tests against 30% pruning and 8-bit quantization.
-                </p>
+
+              {/* Dual-Mode Toggle */}
+              <div className="flex p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono self-start">
+                <button
+                  onClick={() => setEmbedMode("from_scratch")}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    embedMode === "from_scratch" ? "bg-[#ff453a] text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Train From Scratch
+                </button>
+                <button
+                  onClick={() => setEmbedMode("pretrained_upload")}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    embedMode === "pretrained_upload" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Upload Pre-Trained (.pt)
+                </button>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/80 text-xs font-mono text-slate-300 flex items-center justify-between">
+            {/* Active Session Metadata Summary */}
+            <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/80 text-xs font-mono text-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <span className="text-slate-500 block">Selected Model:</span>
-                <span className="text-white font-bold">{modelName}</span>
+                <span className="text-slate-500 block">Target Model Name:</span>
+                <span className="text-white font-bold">{modelName || "Not set (set in Overview)"}</span>
               </div>
               <div>
                 <span className="text-slate-500 block">Active Fernet Key:</span>
                 <span className="text-cyan-400">{keyData ? keyData.key_hash.slice(0, 16) + "..." : "No Key Generated"}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Loss Weight (λ):</span>
-                <span className="text-[#ff453a] font-bold">0.1 (Balanced)</span>
+                <span className="text-slate-500 block">Pipeline Mode:</span>
+                <span className="text-[#ff453a] font-bold">
+                  {embedMode === "from_scratch" ? "Full Joint-Loss Training" : "KL-Preserving Post-Hoc Fine-Tune"}
+                </span>
               </div>
             </div>
+
+            {/* Model Architecture & Hyperparameters */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+              <div>
+                <label className="text-slate-400">Architecture</label>
+                <select
+                  value={architecture}
+                  onChange={(e) => setArchitecture(e.target.value)}
+                  className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-slate-200"
+                >
+                  <option value="MLP">MLP (Tabular / Flattened)</option>
+                  <option value="CNN">CNN (Vision / Conv2d)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400">Input Shape (JSON)</label>
+                <input
+                  type="text"
+                  value={inputShapeStr}
+                  onChange={(e) => setInputShapeStr(e.target.value)}
+                  placeholder="[784] or [3, 32, 32]"
+                  className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-slate-200"
+                />
+              </div>
+              <div>
+                <label className="text-slate-400">Num Classes / Target Class</label>
+                <div className="flex gap-2 mt-1.5">
+                  <input
+                    type="number"
+                    value={numClasses}
+                    onChange={(e) => setNumClasses(Number(e.target.value))}
+                    className="w-1/2 px-3 py-2 rounded-lg raycast-input text-slate-200"
+                  />
+                  <input
+                    type="number"
+                    value={targetClass}
+                    onChange={(e) => setTargetClass(Number(e.target.value))}
+                    className="w-1/2 px-3 py-2 rounded-lg raycast-input text-slate-200"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-slate-400">Watermark Strength (λ)</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  value={lambdaWm}
+                  onChange={(e) => setLambdaWm(Number(e.target.value))}
+                  className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-slate-200"
+                />
+              </div>
+            </div>
+
+            {/* File Upload Zone (Shown in Pre-Trained Upload Mode) */}
+            {embedMode === "pretrained_upload" && (
+              <div className="p-6 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-cyan-500/60 transition text-center space-y-2">
+                <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
+                <div className="text-xs font-mono">
+                  <label className="cursor-pointer text-cyan-400 hover:underline font-semibold">
+                    <span>Click to upload client model (.pt / .pth)</span>
+                    <input
+                      type="file"
+                      accept=".pt,.pth,.bin"
+                      className="hidden"
+                      onChange={(e) => setUploadedModelFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                  <p className="text-slate-500 mt-1">
+                    Supports serialized PyTorch nn.Module or state_dict files. Original task behavior is preserved via KL-Divergence distillation.
+                  </p>
+                </div>
+                {uploadedModelFile && (
+                  <p className="text-xs font-mono text-emerald-400 pt-2">
+                    Selected: {uploadedModelFile.name} ({(uploadedModelFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+            )}
 
             <button
               onClick={handleEmbedWatermark}
               disabled={isEmbedding || !keyData}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff453a] to-[#ff2d55] text-white text-xs font-semibold hover:opacity-90 transition shadow-lg shadow-[#ff453a]/25 disabled:opacity-50 flex items-center gap-2"
             >
-              {isEmbedding ? "Embedding Watermark & Simulating Attacks..." : "Embed Watermark Now"}
+              {isEmbedding
+                ? "Processing & Stress-Testing Watermark..."
+                : embedMode === "pretrained_upload"
+                ? "Inject Watermark into Client Model & Prepare Delivery"
+                : "Train From Scratch with Watermark"}
             </button>
 
             {embedResult && (
               <div className="p-5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-4 font-mono text-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                   <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-sm">
-                    <CheckCircle2 className="w-4 h-4" /> Watermark Successfully Embedded
+                    <CheckCircle2 className="w-4 h-4" /> Watermark Embedded & Ready for Client Delivery
                   </span>
-                  <span className="text-slate-400">Trigger Accuracy: {(embedResult.final_watermark_accuracy * 100).toFixed(1)}%</span>
+                  <span className="text-slate-400">Model ID: {embedResult.model_id}</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Delivery Download Buttons */}
+                <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
+                  <a
+                    href={getDownloadUrl(embedResult.download_model_url)}
+                    download
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-600/20"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Watermarked Model (.pt)
+                  </a>
+                  <a
+                    href={getDownloadUrl(embedResult.download_certificate_url)}
+                    download
+                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center gap-2 transition"
+                  >
+                    <FileArchive className="w-4 h-4 text-cyan-400" />
+                    Download IP Passport (.json)
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-500 block">Final Watermark Accuracy</span>
+                    <span className="text-slate-500 block">Watermark Accuracy</span>
                     <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.final_watermark_accuracy * 100).toFixed(1)}%</p>
                   </div>
+                  {embedResult.task_retention_rate !== null && embedResult.task_retention_rate !== undefined && (
+                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-slate-500 block">Task Retention Rate</span>
+                      <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.task_retention_rate * 100).toFixed(1)}%</p>
+                    </div>
+                  )}
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-500 block">Survives 30% Weight Pruning</span>
+                    <span className="text-slate-500 block">30% Pruning Survival</span>
                     <p className="text-lg font-bold text-cyan-400 mt-1">{(embedResult.pruning_survival_accuracy * 100).toFixed(1)}%</p>
                   </div>
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-500 block">Survives 8-bit Quantization</span>
+                    <span className="text-slate-500 block">8-bit Quant Survival</span>
                     <p className="text-lg font-bold text-cyan-400 mt-1">{(embedResult.quantization_survival_accuracy * 100).toFixed(1)}%</p>
                   </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 space-y-1 bg-slate-900/40 p-3 rounded-lg border border-slate-800/60">
+                  {embedResult.original_weights_sha256 && (
+                    <p className="truncate">Original SHA-256: <span className="text-slate-300">{embedResult.original_weights_sha256}</span></p>
+                  )}
+                  <p className="truncate">Watermarked SHA-256: <span className="text-cyan-300">{embedResult.watermarked_weights_sha256}</span></p>
                 </div>
 
                 <div className="pt-2">
@@ -585,7 +775,7 @@ export default function Home() {
                     {embedResult.training_history.map((h, i) => (
                       <div key={i} className="flex justify-between text-slate-400 text-[11px] bg-slate-900/50 px-2 py-1 rounded">
                         <span>Epoch {h.epoch}</span>
-                        <span>Main Loss: {h.main_loss}</span>
+                        <span>Main/Preserve Loss: {h.main_loss}</span>
                         <span>WM Loss: {h.watermark_loss}</span>
                         <span className="text-emerald-400 font-bold">WM Acc: {(h.watermark_accuracy * 100).toFixed(0)}%</span>
                       </div>

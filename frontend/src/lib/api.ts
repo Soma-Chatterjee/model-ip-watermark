@@ -23,17 +23,25 @@ export interface AuditResponse {
 }
 
 export interface EmbedResponse {
+  model_id: string;
   model_name: string;
+  mode: string;
   status: string;
   final_watermark_accuracy: number;
+  task_retention_rate?: number | null;
   training_history: Array<{
     epoch: number;
     main_loss: number;
     watermark_loss: number;
     watermark_accuracy: number;
+    task_retention_rate?: number;
   }>;
   pruning_survival_accuracy: number;
   quantization_survival_accuracy: number;
+  original_weights_sha256?: string | null;
+  watermarked_weights_sha256: string;
+  download_model_url: string;
+  download_certificate_url: string;
   signature: string;
 }
 
@@ -133,6 +141,22 @@ export async function embedWatermark(data: {
   });
   if (!res.ok) throw new Error("Watermark embedding failed");
   return await res.json();
+}
+
+export async function uploadAndEmbedModel(formData: FormData): Promise<EmbedResponse> {
+  const res = await fetch(`${API_BASE}/api/watermark/upload-and-embed`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Pre-trained model watermarking failed" }));
+    throw new Error(err.detail || "Pre-trained model watermarking failed");
+  }
+  return await res.json();
+}
+
+export function getDownloadUrl(relativePath: string): string {
+  return `${API_BASE}${relativePath}`;
 }
 
 export async function verifyOwnership(data: {
