@@ -48,6 +48,7 @@ export default function Home() {
   // Form states (empty by default for user entry)
   const [modelName, setModelName] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  const [secretPhrase, setSecretPhrase] = useState("");
   const [keyData, setKeyData] = useState<KeyGenResponse | null>(null);
 
   // Audit states
@@ -157,6 +158,7 @@ export default function Home() {
         formData.append("model_name", modelName || "ClientModel");
         formData.append("owner_id", ownerId || "client_org");
         formData.append("secret_key", keyData.secret_key);
+        formData.append("secret_phrase", secretPhrase || "hola amigo");
         formData.append("architecture", architecture);
         formData.append("input_shape", JSON.stringify(parsedShape));
         formData.append("num_classes", String(numClasses));
@@ -170,6 +172,7 @@ export default function Home() {
           model_name: modelName || "ScratchModel",
           owner_id: ownerId || "client_org",
           secret_key: keyData.secret_key,
+          secret_phrase: secretPhrase || "hola amigo",
           architecture,
           input_shape: parsedShape,
           num_classes: numClasses,
@@ -203,6 +206,7 @@ export default function Home() {
     try {
       const res = await verifyOwnership({
         secret_key: keyData.secret_key,
+        secret_phrase: secretPhrase || "hola amigo",
         input_shape: parsedShape,
         num_classes: numClasses,
         target_class: targetClass,
@@ -238,9 +242,9 @@ export default function Home() {
             </div>
             <div>
               <span className="font-semibold tracking-tight text-white flex items-center gap-1.5">
-                Antigravity <span className="text-[#ff453a] font-mono text-xs px-1.5 py-0.5 rounded bg-[#ff453a]/10 border border-[#ff453a]/30">IP-PASS</span>
+                DeepMark <span className="text-[#ff453a] font-mono text-xs px-1.5 py-0.5 rounded bg-[#ff453a]/10 border border-[#ff453a]/30">WHITE-BOX IP</span>
               </span>
-              <p className="text-[11px] text-slate-400 font-mono">Neural Model Watermarking & Dispute Authority</p>
+              <p className="text-[11px] text-slate-400 font-mono">White-Box Neural Network Watermarking & Model IP Protection</p>
             </div>
           </div>
 
@@ -261,10 +265,10 @@ export default function Home() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/60">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              Model Protection Command Center
+              DeepMark Command Center
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Deterministic cryptographic trigger-set injection, zero-knowledge verification & anti-plagiarism origin audits.
+              Covert parameter-space bit signatures, secret trigger phrases, and white-box ownership verification.
             </p>
           </div>
 
@@ -378,7 +382,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div>
                   <label className="text-xs font-mono text-slate-400">Target Model Name</label>
                   <input
@@ -397,6 +401,16 @@ export default function Home() {
                     value={ownerId}
                     onChange={(e) => setOwnerId(e.target.value)}
                     className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-mono text-slate-400">Client Secret Trigger Phrase (e.g. hola amigo)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. hola amigo"
+                    value={secretPhrase}
+                    onChange={(e) => setSecretPhrase(e.target.value)}
+                    className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-emerald-300 font-mono"
                   />
                 </div>
               </div>
@@ -741,15 +755,27 @@ export default function Home() {
                   </a>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-500 block">Watermark Accuracy</span>
+                    <span className="text-slate-500 block">Trigger Phrase Acc</span>
                     <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.final_watermark_accuracy * 100).toFixed(1)}%</p>
                   </div>
-                  {embedResult.task_retention_rate !== null && embedResult.task_retention_rate !== undefined && (
+                  {embedResult.whitebox_bit_accuracy !== null && embedResult.whitebox_bit_accuracy !== undefined && (
                     <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <span className="text-slate-500 block">Task Retention Rate</span>
-                      <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.task_retention_rate * 100).toFixed(1)}%</p>
+                      <span className="text-slate-500 block">White-Box Bit Acc</span>
+                      <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.whitebox_bit_accuracy * 100).toFixed(1)}%</p>
+                    </div>
+                  )}
+                  {embedResult.whitebox_ber !== null && embedResult.whitebox_ber !== undefined && (
+                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-slate-500 block">Bit Error Rate (BER)</span>
+                      <p className="text-lg font-bold text-cyan-400 mt-1">{(embedResult.whitebox_ber * 100).toFixed(2)}%</p>
+                    </div>
+                  )}
+                  {embedResult.l2_parameter_deviation !== null && embedResult.l2_parameter_deviation !== undefined && (
+                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-slate-500 block">ℓ₂ Param Deviation</span>
+                      <p className="text-lg font-bold text-slate-200 mt-1">{embedResult.l2_parameter_deviation.toFixed(4)}</p>
                     </div>
                   )}
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
@@ -884,7 +910,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500 font-mono">
-        Antigravity Model IP Authority &copy; 2026. Cryptographically Verified & Backdoor-Resilient.
+        DeepMark: White-Box Neural Network Watermarking &copy; 2026 &bull; Adamas University, Dept. of CSE
       </footer>
     </div>
   );

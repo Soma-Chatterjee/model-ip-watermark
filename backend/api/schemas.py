@@ -52,6 +52,7 @@ class WatermarkEmbedRequest(BaseModel):
     model_name: str
     owner_id: str
     secret_key: str
+    secret_phrase: str = "hola amigo"
     architecture: str = "MLP" # MLP, CNN
     input_shape: List[int] = [784]
     num_classes: int = 10
@@ -63,10 +64,14 @@ class WatermarkEmbedRequest(BaseModel):
 class WatermarkEmbedResponse(BaseModel):
     model_id: str
     model_name: str
+    secret_phrase_hash: str
     mode: str
     status: str
     final_watermark_accuracy: float
     task_retention_rate: Optional[float] = None
+    whitebox_bit_accuracy: Optional[float] = None
+    whitebox_ber: Optional[float] = None
+    l2_parameter_deviation: Optional[float] = None
     training_history: List[Dict[str, Any]]
     pruning_survival_accuracy: float
     quantization_survival_accuracy: float
@@ -79,6 +84,7 @@ class WatermarkEmbedResponse(BaseModel):
 
 class VerificationRequest(BaseModel):
     secret_key: str
+    secret_phrase: str = "hola amigo"
     input_shape: List[int]
     num_classes: int
     target_class: int
@@ -90,6 +96,9 @@ class VerificationRequest(BaseModel):
 
 class VerificationResponse(BaseModel):
     mode: str
+    secret_phrase_verified: Optional[bool] = None
+    whitebox_bit_accuracy: Optional[float] = None
+    whitebox_ber: Optional[float] = None
     total_tested: int
     correct_matches: int
     accuracy: float

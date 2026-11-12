@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Antigravity IP-PASS | Neural Model Watermarking & Ownership Verification",
-  description: "Cryptographic trigger-set neural network watermarking, authorship auditing, and binomial p-value dispute verification.",
+  title: "DeepMark | White-Box Neural Network Watermarking & Model IP Protection",
+  description: "White-Box Neural Network Watermarking for Intellectual Property Protection of Deep Learning Models — Adamas University CSE.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

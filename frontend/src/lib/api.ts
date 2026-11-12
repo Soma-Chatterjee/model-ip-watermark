@@ -25,10 +25,14 @@ export interface AuditResponse {
 export interface EmbedResponse {
   model_id: string;
   model_name: string;
+  secret_phrase_hash: string;
   mode: string;
   status: string;
   final_watermark_accuracy: number;
   task_retention_rate?: number | null;
+  whitebox_bit_accuracy?: number | null;
+  whitebox_ber?: number | null;
+  l2_parameter_deviation?: number | null;
   training_history: Array<{
     epoch: number;
     main_loss: number;
@@ -47,6 +51,9 @@ export interface EmbedResponse {
 
 export interface VerifyResponse {
   mode: string;
+  secret_phrase_verified?: boolean | null;
+  whitebox_bit_accuracy?: number | null;
+  whitebox_ber?: number | null;
   total_tested: number;
   correct_matches: number;
   accuracy: number;
@@ -127,6 +134,7 @@ export async function embedWatermark(data: {
   model_name: string;
   owner_id: string;
   secret_key: string;
+  secret_phrase: string;
   architecture: string;
   input_shape: number[];
   num_classes: number;
@@ -161,6 +169,7 @@ export function getDownloadUrl(relativePath: string): string {
 
 export async function verifyOwnership(data: {
   secret_key: string;
+  secret_phrase: string;
   input_shape: number[];
   num_classes: number;
   target_class: number;

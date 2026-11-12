@@ -18,6 +18,7 @@ from backend.core.watermark import KeyAndWatermarkGenerator
 from backend.core.verifier import WatermarkVerifier
 from backend.core.auditor import AuthorshipAuditor
 from backend.core.trainer import WatermarkedTrainer, RobustnessEvaluator
+from backend.core.whitebox import DeepMarkWhiteBoxEngine
 from backend.db.repository import DatabaseRepository
 from backend.api.schemas import (
     HeartbeatResponse,
@@ -33,8 +34,8 @@ from backend.api.schemas import (
 
 # Initialize FastAPI App
 app = FastAPI(
-    title="Antigravity Model IP Protection API",
-    description="Production-grade Neural Network Watermarking, Proof-of-Authorship Auditing & Dispute Verification Service.",
+    title="DeepMark: White-Box Neural Network Watermarking API",
+    description="White-Box Neural Network Watermarking & Secret Trigger-Phrase IP Protection System (Adamas University CSE).",
     version="1.0.0"
 )
 
@@ -100,7 +101,7 @@ def get_health():
     uptime = int(time.time() - START_TIME)
     return HeartbeatResponse(
         status="healthy",
-        service="model-ip-watermark-core",
+        service="deepmark-watermark-core",
         uptime_seconds=uptime,
         version="1.0.0"
     )
@@ -251,7 +252,7 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
         dataset = TensorDataset(x_train, y_train)
         dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        # 4. Train with watermark embedding from Epoch 1
+        # 4. Train with Dual Watermark embedding (Trigger-Set + White-Box Parameter Projection)
         trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.005)
         train_res = trainer.train_with_watermark(
             train_loader=dataloader,
@@ -259,8 +260,12 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             targets=targets,
             epochs=req.epochs,
             lambda_wm=req.lambda_wm,
-            watermark_freq=2
+            watermark_freq=2,
+            secret_key=req.secret_key.encode("utf-8"),
+            secret_phrase=req.secret_phrase
         )
+        wb_metrics = train_res.get("whitebox_metrics", {})
+        phrase_hash = hashlib.sha256(req.secret_phrase.encode("utf-8")).hexdigest()
 
         # 5. Robustness evaluation
         prune_acc = RobustnessEvaluator.evaluate_pruning_attack(
@@ -285,7 +290,11 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             "input_shape": req.input_shape,
             "num_classes": req.num_classes,
             "target_class": req.target_class,
+            "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": train_res["final_watermark_accuracy"],
+            "whitebox_bit_accuracy": wb_metrics.get("bit_accuracy"),
+            "whitebox_ber": wb_metrics.get("bit_error_rate"),
+            "l2_parameter_deviation": wb_metrics.get("l2_parameter_deviation"),
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
             "original_weights_sha256": None,
@@ -316,10 +325,14 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
         return WatermarkEmbedResponse(
             model_id=model_record_id,
             model_name=req.model_name,
+            secret_phrase_hash=phrase_hash,
             mode="from_scratch",
             status="watermarked_success",
             final_watermark_accuracy=train_res["final_watermark_accuracy"],
             task_retention_rate=None,
+            whitebox_bit_accuracy=wb_metrics.get("bit_accuracy"),
+            whitebox_ber=wb_metrics.get("bit_error_rate"),
+            l2_parameter_deviation=wb_metrics.get("l2_parameter_deviation"),
             training_history=train_res["history"],
             pruning_survival_accuracy=prune_acc,
             quantization_survival_accuracy=quant_acc,
@@ -340,6 +353,7 @@ async def upload_and_embed_model(
     model_name: str = Form(...),
     owner_id: str = Form(...),
     secret_key: str = Form(...),
+    secret_phrase: str = Form("hola amigo"),
     architecture: str = Form("MLP"),
     input_shape: str = Form("[784]"),
     num_classes: int = Form(10),
@@ -401,15 +415,19 @@ async def upload_and_embed_model(
             target_class=target_class
         )
 
-        # Preserve original model behavior via KL Distillation while embedding watermark
+        # Preserve original model behavior via KL Distillation while embedding Dual Watermarks
         trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.002)
         tune_res = trainer.fine_tune_pretrained_with_preservation(
             input_shape=tuple(parsed_shape),
             triggers=triggers,
             targets=targets,
             epochs=epochs,
-            lambda_wm=lambda_wm
+            lambda_wm=lambda_wm,
+            secret_key=secret_key.encode("utf-8"),
+            secret_phrase=secret_phrase
         )
+        wb_metrics = tune_res.get("whitebox_metrics", {})
+        phrase_hash = hashlib.sha256(secret_phrase.encode("utf-8")).hexdigest()
 
         # Robustness checks
         prune_acc = RobustnessEvaluator.evaluate_pruning_attack(
@@ -433,8 +451,12 @@ async def upload_and_embed_model(
             "input_shape": parsed_shape,
             "num_classes": num_classes,
             "target_class": target_class,
+            "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": tune_res["final_watermark_accuracy"],
             "task_retention_rate": tune_res["task_retention_rate"],
+            "whitebox_bit_accuracy": wb_metrics.get("bit_accuracy"),
+            "whitebox_ber": wb_metrics.get("bit_error_rate"),
+            "l2_parameter_deviation": wb_metrics.get("l2_parameter_deviation"),
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
             "original_weights_sha256": original_sha256,
@@ -465,10 +487,14 @@ async def upload_and_embed_model(
         return WatermarkEmbedResponse(
             model_id=model_record_id,
             model_name=model_name,
+            secret_phrase_hash=phrase_hash,
             mode="pretrained_upload",
             status="watermarked_success",
             final_watermark_accuracy=tune_res["final_watermark_accuracy"],
             task_retention_rate=tune_res["task_retention_rate"],
+            whitebox_bit_accuracy=wb_metrics.get("bit_accuracy"),
+            whitebox_ber=wb_metrics.get("bit_error_rate"),
+            l2_parameter_deviation=wb_metrics.get("l2_parameter_deviation"),
             training_history=tune_res["history"],
             pruning_survival_accuracy=prune_acc,
             quantization_survival_accuracy=quant_acc,
@@ -565,6 +591,7 @@ async def verify_watermark_endpoint(req: VerificationRequest):
 
         verifier = WatermarkVerifier(accuracy_threshold=0.85)
 
+        wb_verif = {}
         if req.endpoint_url:
             # Black-box verification via remote REST API
             result = await verifier.verify_remote_api(
@@ -590,10 +617,22 @@ async def verify_watermark_endpoint(req: VerificationRequest):
                 num_classes=req.num_classes
             )
 
-        cert_id = f"CERT-WM-{uuid.uuid4().hex[:12].upper()}"
+            # Also run White-Box Secret Phrase Bitwise Extraction
+            wb_verif = DeepMarkWhiteBoxEngine.extract_and_verify(
+                model=target_model,
+                secret_key=key_bytes,
+                expected_phrase=req.secret_phrase,
+                num_bits=64,
+                device="cpu"
+            )
+
+        cert_id = f"CERT-DM-{uuid.uuid4().hex[:12].upper()}"
 
         return VerificationResponse(
             mode=result.get("mode", "white_box"),
+            secret_phrase_verified=wb_verif.get("is_verified"),
+            whitebox_bit_accuracy=wb_verif.get("bit_accuracy"),
+            whitebox_ber=wb_verif.get("bit_error_rate"),
             total_tested=result.get("total_tested", req.num_triggers),
             correct_matches=result.get("correct_matches", 0),
             accuracy=result.get("accuracy", 0.0),
