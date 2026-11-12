@@ -8,7 +8,9 @@ torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
 numpy==2.2.3
 scipy==1.15.2
 supabase==2.13.0
+psycopg2-binary==2.9.10
 python-multipart==0.0.20
 pytest==8.3.4
 requests==2.32.3
 httpx==0.28.1
+python-dotenv==1.0.1

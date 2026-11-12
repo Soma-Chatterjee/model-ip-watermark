@@ -18,6 +18,7 @@ from backend.core.watermark import KeyAndWatermarkGenerator
 from backend.core.verifier import WatermarkVerifier
 from backend.core.auditor import AuthorshipAuditor
 from backend.core.trainer import WatermarkedTrainer, RobustnessEvaluator
+from backend.db.repository import DatabaseRepository
 from backend.api.schemas import (
     HeartbeatResponse,
     KeyGenerationRequest,
@@ -108,24 +109,30 @@ def get_health():
 @app.get("/api/models", tags=["Registry"])
 def list_protected_models():
     """
-    Returns live count and metadata of models actively protected in this engine instance.
+    Returns live count and metadata of protected models.
+    Merges persistent Supabase PostgreSQL records with active in-memory models.
     """
-    models_list = []
+    db_models = DatabaseRepository.list_models()
+    seen_ids = {m["id"] for m in db_models}
+
     for mid, info in ACTIVE_MODELS.items():
-        models_list.append({
-            "id": mid,
-            "model_name": info.get("model_name", "Unnamed Model"),
-            "owner_id": info.get("owner_id", "Unknown"),
-            "architecture": info.get("architecture", "MLP"),
-            "target_class": info.get("target_class", 0),
-            "watermark_accuracy": info.get("watermark_accuracy", 1.0),
-            "pruning_survival": info.get("pruning_survival", 1.0),
-            "quantization_survival": info.get("quantization_survival", 1.0),
-            "created_at": info.get("created_at", "")
-        })
+        if mid not in seen_ids:
+            db_models.insert(0, {
+                "id": mid,
+                "model_name": info.get("model_name", "Unnamed Model"),
+                "owner_id": info.get("owner_id", "Unknown"),
+                "architecture": info.get("architecture", "MLP"),
+                "target_class": info.get("target_class", 0),
+                "watermark_accuracy": info.get("watermark_accuracy", 1.0),
+                "pruning_survival": info.get("pruning_survival", 1.0),
+                "quantization_survival": info.get("quantization_survival", 1.0),
+                "created_at": info.get("created_at", "")
+            })
+
     return {
-        "active_count": len(models_list),
-        "models": models_list
+        "active_count": len(db_models),
+        "database_connected": DatabaseRepository.is_connected(),
+        "models": db_models
     }
 
 
@@ -287,6 +294,25 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             "created_at": datetime.utcnow().isoformat() + "Z"
         }
 
+        # Persist metadata & key fingerprint to Supabase PostgreSQL
+        DatabaseRepository.save_registered_model(
+            model_id=model_record_id,
+            org_slug=req.owner_id,
+            model_name=req.model_name,
+            architecture=req.architecture,
+            input_shape=req.input_shape,
+            num_classes=req.num_classes,
+            weights_sha256=weights_sha,
+            status="watermarked",
+            key_data={
+                "key_hash": generator.key_hash,
+                "signature": signature,
+                "num_triggers": 100,
+                "target_class": req.target_class,
+                "trigger_seed": generator.derive_seed_from_key()
+            }
+        )
+
         return WatermarkEmbedResponse(
             model_id=model_record_id,
             model_name=req.model_name,
@@ -416,6 +442,25 @@ async def upload_and_embed_model(
             "signature": signature,
             "created_at": datetime.utcnow().isoformat() + "Z"
         }
+
+        # Persist metadata & key fingerprint to Supabase PostgreSQL
+        DatabaseRepository.save_registered_model(
+            model_id=model_record_id,
+            org_slug=owner_id,
+            model_name=model_name,
+            architecture=architecture,
+            input_shape=parsed_shape,
+            num_classes=num_classes,
+            weights_sha256=watermarked_sha256,
+            status="watermarked",
+            key_data={
+                "key_hash": generator.key_hash,
+                "signature": signature,
+                "num_triggers": 100,
+                "target_class": target_class,
+                "trigger_seed": generator.derive_seed_from_key()
+            }
+        )
 
         return WatermarkEmbedResponse(
             model_id=model_record_id,
