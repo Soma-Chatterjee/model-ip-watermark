@@ -421,7 +421,8 @@ async def upload_and_embed_model(
             input_shape=tuple(parsed_shape),
             triggers=triggers,
             targets=targets,
-            epochs=epochs,
+            epochs=min(epochs, 3),
+            calibration_samples=64,
             lambda_wm=lambda_wm,
             secret_key=secret_key.encode("utf-8"),
             secret_phrase=secret_phrase
