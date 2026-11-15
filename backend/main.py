@@ -108,6 +108,7 @@ def get_health():
 
 
 @app.get("/api/models", tags=["Registry"])
+@app.get("/api/models/active", tags=["Registry"])
 def list_protected_models():
     """
     Returns live count and metadata of protected models.
@@ -545,11 +546,11 @@ def download_ip_certificate(model_id: str):
 
     rec = ACTIVE_MODELS[model_id]
     certificate = {
-        "certificate_type": "Antigravity IP-PASS Ownership Deed",
+        "certificate_type": "DeepMark Dual-Fidelity IP Ownership Deed",
         "model_id": model_id,
         "model_name": rec["model_name"],
         "owner_id": rec["owner_id"],
-        "embedding_mode": rec.get("mode", "from_scratch"),
+        "embedding_mode": rec.get("mode", "pretrained_upload"),
         "architecture": rec["architecture"],
         "target_watermark_class": rec["target_class"],
         "watermark_accuracy": rec["watermark_accuracy"],
@@ -626,6 +627,14 @@ async def verify_watermark_endpoint(req: VerificationRequest):
                 device="cpu"
             )
 
+        is_watermarked = result.get("is_watermarked", False)
+        verdict = result.get("verdict", "INCONCLUSIVE")
+        if wb_verif:
+            # Dual-fidelity validation: if secret phrase extraction fails, reject claim
+            if not wb_verif.get("is_verified", True):
+                is_watermarked = False
+                verdict = "WATERMARK_NOT_FOUND"
+
         cert_id = f"CERT-DM-{uuid.uuid4().hex[:12].upper()}"
 
         return VerificationResponse(
@@ -637,10 +646,10 @@ async def verify_watermark_endpoint(req: VerificationRequest):
             correct_matches=result.get("correct_matches", 0),
             accuracy=result.get("accuracy", 0.0),
             threshold=result.get("threshold", 0.85),
-            is_watermarked=result.get("is_watermarked", False),
+            is_watermarked=is_watermarked,
             p_value=result.get("p_value", 1.0),
             confidence_percent=result.get("confidence_percent", 0.0),
-            verdict=result.get("verdict", "INCONCLUSIVE"),
+            verdict=verdict,
             certificate_id=cert_id
         )
     except Exception as e:

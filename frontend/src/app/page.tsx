@@ -477,7 +477,7 @@ export default function Home() {
               <div>
                 <h2 className="text-lg font-semibold text-white">Proof of Authorship & Origin Verification</h2>
                 <p className="text-xs text-slate-400">
-                  Manual & automated lineage checks: confirms model was genuinely trained from scratch and not copied from HuggingFace.
+                  Automated lineage checks: verifies client model's authenticity and ensures weights were not plagiarized from public HuggingFace baselines.
                 </p>
               </div>
             </div>
