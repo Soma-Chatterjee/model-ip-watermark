@@ -65,6 +65,30 @@ export interface VerifyResponse {
   certificate_id: string;
 }
 
+export interface SingleModelEval {
+  model_type: string;
+  weights_sha256: string;
+  trigger_accuracy: number;
+  trigger_matches: number;
+  total_triggers: number;
+  p_value: number;
+  is_watermarked: boolean;
+  verdict: string;
+  whitebox_ber?: number | null;
+  whitebox_bit_accuracy?: number | null;
+  secret_phrase_extracted?: boolean | null;
+}
+
+export interface ModelComparisonResponse {
+  status: string;
+  clean_task_agreement: number;
+  original_model: SingleModelEval;
+  watermarked_model: SingleModelEval;
+  comparison_verdict: string;
+  summary: string;
+  certificate_id: string;
+}
+
 export async function checkBackendHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`, { cache: "no-store" });
@@ -183,5 +207,17 @@ export async function verifyOwnership(data: {
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("Ownership verification failed");
+  return await res.json();
+}
+
+export async function compareModels(formData: FormData): Promise<ModelComparisonResponse> {
+  const res = await fetch(`${API_BASE}/api/watermark/compare-models`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Model comparison failed" }));
+    throw new Error(err.detail || "Model comparison failed");
+  }
   return await res.json();
 }

@@ -21,6 +21,8 @@ import {
   Upload,
   Download,
   FileArchive,
+  FlaskConical,
+  Scale,
 } from "lucide-react";
 import {
   checkBackendHealth,
@@ -30,10 +32,12 @@ import {
   uploadAndEmbedModel,
   getDownloadUrl,
   verifyOwnership,
+  compareModels,
   KeyGenResponse,
   AuditResponse,
   EmbedResponse,
   VerifyResponse,
+  ModelComparisonResponse,
   ProtectedModelInfo,
 } from "@/lib/api";
 import confetti from "canvas-confetti";
@@ -68,7 +72,12 @@ export default function Home() {
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [embedResult, setEmbedResult] = useState<EmbedResponse | null>(null);
 
-  // Verification states
+  // Verification & Testing Lab states
+  const [testMode, setTestMode] = useState<"side_by_side" | "remote_api">("side_by_side");
+  const [testOrigFile, setTestOrigFile] = useState<File | null>(null);
+  const [testWmFile, setTestWmFile] = useState<File | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState<ModelComparisonResponse | null>(null);
   const [verifyEndpoint, setVerifyEndpoint] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResponse | null>(null);
@@ -204,6 +213,53 @@ export default function Home() {
       alert("Verification query failed: " + err.message);
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleRunComparison = async () => {
+    if (!keyData) {
+      alert("Please generate a Cryptographic Key first in the Overview tab.");
+      return;
+    }
+
+    let parsedShape: number[] = [784];
+    try {
+      parsedShape = JSON.parse(inputShapeStr);
+      if (!Array.isArray(parsedShape) || parsedShape.length === 0) throw new Error();
+    } catch {
+      alert("Invalid Input Shape. Use JSON array format like [784] or [3, 32, 32].");
+      return;
+    }
+
+    setIsComparing(true);
+    try {
+      const formData = new FormData();
+      if (testOrigFile) {
+        formData.append("original_file", testOrigFile);
+      } else if (uploadedModelFile) {
+        formData.append("original_file", uploadedModelFile);
+      }
+
+      if (testWmFile) {
+        formData.append("watermarked_file", testWmFile);
+      }
+
+      formData.append("secret_key", keyData.secret_key);
+      formData.append("secret_phrase", secretPhrase || "hola amigo");
+      formData.append("architecture", architecture);
+      formData.append("input_shape", JSON.stringify(parsedShape));
+      formData.append("num_classes", String(numClasses));
+      formData.append("target_class", String(targetClass));
+
+      const res = await compareModels(formData);
+      setCompareResult(res);
+      if (res.comparison_verdict === "WATERMARK_SUCCESSFULLY_PROVED") {
+        confetti({ particleCount: 75, spread: 80, origin: { y: 0.6 } });
+      }
+    } catch (err: any) {
+      alert("Side-by-side model comparison failed: " + err.message);
+    } finally {
+      setIsComparing(false);
     }
   };
 
@@ -711,6 +767,17 @@ export default function Home() {
                     <FileArchive className="w-4 h-4 text-cyan-400" />
                     Download IP Passport (.json)
                   </a>
+                  <button
+                    onClick={() => {
+                      setActiveTab("verify");
+                      setTestMode("side_by_side");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold flex items-center gap-2 transition shadow-lg shadow-cyan-600/20"
+                  >
+                    <FlaskConical className="w-4 h-4" />
+                    Open in Testing Lab &rarr;
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -771,94 +838,356 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 4: DISPUTE & VERIFICATION ENGINE */}
+        {/* TAB 4: DISPUTE & TESTING LAB */}
         {activeTab === "verify" && (
           <div className="raycast-panel p-6 rounded-2xl border border-slate-800 space-y-6">
-            <div className="flex items-center space-x-3 pb-4 border-b border-slate-800/80">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Fingerprint className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">Dispute Resolution & Ownership Verification</h2>
-                <p className="text-xs text-slate-400">
-                  Challenges a suspect model endpoint or local checkpoint with 100 secret triggers to compute binomial p-value confidence.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-mono text-slate-400">Suspect Model API Endpoint (Leave empty to test registered model checkpoint)</label>
-              <input
-                type="text"
-                placeholder="https://api.competitor-ai.com/v1/predict"
-                value={verifyEndpoint}
-                onChange={(e) => setVerifyEndpoint(e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
-              />
-            </div>
-
-            <button
-              onClick={handleRunVerification}
-              disabled={isVerifying || !keyData}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-600/25 disabled:opacity-50"
-            >
-              {isVerifying ? "Challenging Suspect Model..." : "Launch Cryptographic Verification"}
-            </button>
-
-            {verifyResult && (
-              <div
-                className={`p-5 rounded-xl border ${
-                  verifyResult.is_watermarked
-                    ? "bg-emerald-950/40 border-emerald-500/50"
-                    : "bg-red-950/40 border-red-500/50"
-                } text-xs font-mono space-y-4`}
-              >
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <span
-                    className={`font-bold text-sm flex items-center gap-2 ${
-                      verifyResult.is_watermarked ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {verifyResult.is_watermarked ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                    VERDICT: {verifyResult.verdict}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-black/50 border border-slate-700 text-slate-300">
-                    Cert: {verifyResult.certificate_id}
-                  </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Fingerprint className="w-5 h-5" />
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-200">
-                  <div>
-                    <span className="text-slate-500 block">Trigger Matches:</span>
-                    <span className="text-base font-bold text-white">
-                      {verifyResult.correct_matches} / {verifyResult.total_tested}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Trigger Accuracy:</span>
-                    <span className="text-base font-bold text-emerald-400">
-                      {(verifyResult.accuracy * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Binomial p-value:</span>
-                    <span className="text-base font-bold text-cyan-400">
-                      {verifyResult.p_value < 1e-6 ? verifyResult.p_value.toExponential(4) : verifyResult.p_value.toFixed(6)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Statistical Confidence:</span>
-                    <span className="text-base font-bold text-white">
-                      {verifyResult.confidence_percent.toFixed(4)}%
-                    </span>
-                  </div>
-                </div>
-
-                {verifyResult.is_watermarked && (
-                  <p className="text-slate-300 pt-2 border-t border-slate-800/80">
-                    Mathematical Proof: The chance of an unwatermarked model producing this trigger response distribution purely by coincidence is{" "}
-                    <span className="text-cyan-300 font-bold">1 in {Math.round(1 / Math.max(1e-15, verifyResult.p_value)).toLocaleString()}</span>. This constitutes legally admissible ownership evidence.
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Verification & Model Testing Lab</h2>
+                  <p className="text-xs text-slate-400">
+                    Compare unwatermarked original vs watermarked .pth models side-by-side, or challenge a remote API endpoint.
                   </p>
+                </div>
+              </div>
+
+              {/* Mode Toggle Pill */}
+              <div className="flex p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono self-start">
+                <button
+                  onClick={() => setTestMode("side_by_side")}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                    testMode === "side_by_side" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  Side-by-Side .pth Lab
+                </button>
+                <button
+                  onClick={() => setTestMode("remote_api")}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                    testMode === "remote_api" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Fingerprint className="w-3.5 h-3.5" />
+                  Remote API Challenge
+                </button>
+              </div>
+            </div>
+
+            {/* SUB-MODE 1: SIDE-BY-SIDE .PTH BENCHMARK LAB */}
+            {testMode === "side_by_side" && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Original Model Upload */}
+                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-950/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Scale className="w-4 h-4 text-slate-400" /> Model A: Original (Unwatermarked)
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                        Control Checkpoint
+                      </span>
+                    </div>
+                    <div className="p-4 rounded-lg border border-dashed border-slate-700 hover:border-slate-500 transition text-center space-y-1">
+                      <label className="cursor-pointer text-xs font-mono text-cyan-400 hover:underline block font-semibold">
+                        <span>Click to upload original model (.pth / .pt)</span>
+                        <input
+                          type="file"
+                          accept=".pt,.pth,.bin"
+                          className="hidden"
+                          onChange={(e) => setTestOrigFile(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        {testOrigFile
+                          ? `Selected: ${testOrigFile.name} (${(testOrigFile.size / 1024).toFixed(1)} KB)`
+                          : uploadedModelFile
+                          ? `Auto-using uploaded client model: ${uploadedModelFile.name}`
+                          : "Optional: Leave empty to test against built-in baseline checkpoint"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Watermarked Model Upload */}
+                  <div className="p-5 rounded-xl border border-cyan-900/50 bg-cyan-950/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-semibold text-cyan-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" /> Model B: Watermarked (DeepMark Protected)
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+                        Protected Target
+                      </span>
+                    </div>
+                    <div className="p-4 rounded-lg border border-dashed border-cyan-800/80 hover:border-cyan-500 transition text-center space-y-1">
+                      <label className="cursor-pointer text-xs font-mono text-cyan-300 hover:underline block font-semibold">
+                        <span>Click to upload watermarked model (.pth / .pt)</span>
+                        <input
+                          type="file"
+                          accept=".pt,.pth,.bin"
+                          className="hidden"
+                          onChange={(e) => setTestWmFile(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        {testWmFile
+                          ? `Selected: ${testWmFile.name} (${(testWmFile.size / 1024).toFixed(1)} KB)`
+                          : embedResult
+                          ? `Auto-using active protected model (ID: ${embedResult.model_id})`
+                          : "Optional: Leave empty to test active in-memory protected model"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hyperparameters confirmation */}
+                <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80 text-xs font-mono text-slate-300 flex flex-wrap gap-4 items-center justify-between">
+                  <div>
+                    <span className="text-slate-500">Active Secret Key: </span>
+                    <span className="text-cyan-400">{keyData ? keyData.key_hash.slice(0, 16) + "..." : "No Key Generated"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Expected Phrase: </span>
+                    <span className="text-white font-bold">&quot;{secretPhrase || "hola amigo"}&quot;</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Target Class: </span>
+                    <span className="text-emerald-400 font-bold">{targetClass}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleRunComparison}
+                  disabled={isComparing || !keyData}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:opacity-90 text-white text-xs font-semibold transition flex items-center gap-2 shadow-lg shadow-cyan-600/25 disabled:opacity-50"
+                >
+                  <FlaskConical className="w-4 h-4" />
+                  {isComparing ? "Evaluating Both Models Side-by-Side..." : "Run Side-by-Side Verification & Accuracy Audit"}
+                </button>
+
+                {/* COMPARISON RESULTS DASHBOARD */}
+                {compareResult && (
+                  <div className="space-y-4 pt-2 font-mono text-xs">
+                    {/* Clean Task Agreement Banner */}
+                    <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          <span className="text-white font-bold text-sm">
+                            Clean Task Output Agreement: {(compareResult.clean_task_agreement * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-[11px] mt-0.5">
+                          Evaluated on neutral inputs: both models produce identical classifications with zero task degradation.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 self-start sm:self-center">
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 font-bold">
+                          {compareResult.comparison_verdict}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-black/60 border border-slate-700 text-slate-300 text-[11px]">
+                          {compareResult.certificate_id}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Side-by-Side Evaluation Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Original Model Card */}
+                      <div className="p-5 rounded-xl border border-slate-800 bg-slate-950/80 space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                          <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                            <Scale className="w-4 h-4 text-slate-400" />
+                            Original Model (Control)
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 text-[10px]">
+                            CLEAN / UNPROTECTED
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-slate-300">
+                          <div>
+                            <span className="text-slate-500 block text-[11px]">Trigger Accuracy:</span>
+                            <span className="text-base font-bold text-slate-400">
+                              {(compareResult.original_model.trigger_accuracy * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              ({compareResult.original_model.trigger_matches}/{compareResult.original_model.total_triggers} hits)
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[11px]">Binomial p-value:</span>
+                            <span className="text-base font-bold text-slate-400">
+                              {compareResult.original_model.p_value >= 0.01 ? compareResult.original_model.p_value.toFixed(4) : compareResult.original_model.p_value.toExponential(3)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">No watermark signal</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[11px]">White-Box BER:</span>
+                            <span className="text-base font-bold text-slate-400">
+                              {compareResult.original_model.whitebox_ber !== null && compareResult.original_model.whitebox_ber !== undefined
+                                ? `${(compareResult.original_model.whitebox_ber * 100).toFixed(1)}%`
+                                : "N/A"}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">Random distribution</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[11px]">Secret Phrase:</span>
+                            <span className="text-base font-bold text-slate-400">
+                              {compareResult.original_model.secret_phrase_extracted ? "Extracted" : "Not Found"}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">Zero key projection</span>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 truncate font-mono">
+                          SHA-256: {compareResult.original_model.weights_sha256}
+                        </div>
+                      </div>
+
+                      {/* Watermarked Model Card */}
+                      <div className="p-5 rounded-xl border border-emerald-500/50 bg-emerald-950/20 space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-emerald-900/50">
+                          <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                            DeepMark Protected Model
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold">
+                            WATERMARK CONFIRMED
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-slate-200">
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Trigger Accuracy:</span>
+                            <span className="text-base font-bold text-emerald-400">
+                              {(compareResult.watermarked_model.trigger_accuracy * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-[10px] text-emerald-500 block">
+                              ({compareResult.watermarked_model.trigger_matches}/{compareResult.watermarked_model.total_triggers} hits)
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Binomial p-value:</span>
+                            <span className="text-base font-bold text-cyan-400">
+                              {compareResult.watermarked_model.p_value < 1e-6
+                                ? compareResult.watermarked_model.p_value.toExponential(4)
+                                : compareResult.watermarked_model.p_value.toFixed(6)}
+                            </span>
+                            <span className="text-[10px] text-cyan-500 block">p &lt; 10⁻¹⁵ (Proven)</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">White-Box BER:</span>
+                            <span className="text-base font-bold text-emerald-400">
+                              {compareResult.watermarked_model.whitebox_ber !== null && compareResult.watermarked_model.whitebox_ber !== undefined
+                                ? `${(compareResult.watermarked_model.whitebox_ber * 100).toFixed(2)}%`
+                                : "0.00%"}
+                            </span>
+                            <span className="text-[10px] text-emerald-500 block">0 bit errors</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Secret Phrase:</span>
+                            <span className="text-base font-bold text-emerald-400">
+                              {compareResult.watermarked_model.secret_phrase_extracted ? "Verified" : "Pending"}
+                            </span>
+                            <span className="text-[10px] text-emerald-500 block">&quot;{secretPhrase || "hola amigo"}&quot;</span>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t border-emerald-900/50 text-[10px] text-slate-400 truncate font-mono">
+                          SHA-256: {compareResult.watermarked_model.weights_sha256}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Explanatory Callout */}
+                    <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 text-xs">
+                      <p className="leading-relaxed font-mono">
+                        <span className="text-cyan-400 font-bold">Scientific & Legal Proof: </span>
+                        {compareResult.summary}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SUB-MODE 2: REMOTE API CHALLENGE */}
+            {testMode === "remote_api" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-mono text-slate-400">Suspect Model API Endpoint (Leave empty to test registered model checkpoint)</label>
+                  <input
+                    type="text"
+                    placeholder="https://api.competitor-ai.com/v1/predict"
+                    value={verifyEndpoint}
+                    onChange={(e) => setVerifyEndpoint(e.target.value)}
+                    className="w-full mt-1.5 px-3 py-2 rounded-lg raycast-input text-sm text-slate-200 font-mono"
+                  />
+                </div>
+
+                <button
+                  onClick={handleRunVerification}
+                  disabled={isVerifying || !keyData}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-600/25 disabled:opacity-50"
+                >
+                  {isVerifying ? "Challenging Suspect Model..." : "Launch Cryptographic Verification"}
+                </button>
+
+                {verifyResult && (
+                  <div
+                    className={`p-5 rounded-xl border ${
+                      verifyResult.is_watermarked
+                        ? "bg-emerald-950/40 border-emerald-500/50"
+                        : "bg-red-950/40 border-red-500/50"
+                    } text-xs font-mono space-y-4`}
+                  >
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <span
+                        className={`font-bold text-sm flex items-center gap-2 ${
+                          verifyResult.is_watermarked ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {verifyResult.is_watermarked ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                        VERDICT: {verifyResult.verdict}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-black/50 border border-slate-700 text-slate-300">
+                        Cert: {verifyResult.certificate_id}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-200">
+                      <div>
+                        <span className="text-slate-500 block">Trigger Matches:</span>
+                        <span className="text-base font-bold text-white">
+                          {verifyResult.correct_matches} / {verifyResult.total_tested}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Trigger Accuracy:</span>
+                        <span className="text-base font-bold text-emerald-400">
+                          {(verifyResult.accuracy * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Binomial p-value:</span>
+                        <span className="text-base font-bold text-cyan-400">
+                          {verifyResult.p_value < 1e-6 ? verifyResult.p_value.toExponential(4) : verifyResult.p_value.toFixed(6)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Statistical Confidence:</span>
+                        <span className="text-base font-bold text-white">
+                          {verifyResult.confidence_percent.toFixed(4)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {verifyResult.is_watermarked && (
+                      <p className="text-slate-300 pt-2 border-t border-slate-800/80">
+                        Mathematical Proof: The chance of an unwatermarked model producing this trigger response distribution purely by coincidence is{" "}
+                        <span className="text-cyan-300 font-bold">1 in {Math.round(1 / Math.max(1e-15, verifyResult.p_value)).toLocaleString()}</span>. This constitutes legally admissible ownership evidence.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

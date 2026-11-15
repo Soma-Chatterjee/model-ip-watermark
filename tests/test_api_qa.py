@@ -356,6 +356,54 @@ def run_qa_suite():
         record("8. GET /openapi.json (Schema Consistency)", False, str(e))
 
     # -------------------------------------------------------------
+    # 9. Side-by-Side Model Testing Lab (Original vs Watermarked .pth)
+    # -------------------------------------------------------------
+    t0 = time.time()
+    try:
+        form_data = {
+            "secret_key": key_data["secret_key"],
+            "secret_phrase": "hola amigo",
+            "architecture": "MLP",
+            "input_shape": "[784]",
+            "num_classes": "10",
+            "target_class": "7"
+        }
+        files = {}
+        if os.path.exists("demo_client_model.pth"):
+            with open("demo_client_model.pth", "rb") as f:
+                orig_bytes = f.read()
+            files["original_file"] = ("orig_model.pth", orig_bytes, "application/octet-stream")
+
+        r = client.post("/api/watermark/compare-models", data=form_data, files=files if files else None)
+        elapsed = (time.time() - t0) * 1000
+        cmp_data = r.json()
+
+        orig_eval = cmp_data.get("original_model", {})
+        wm_eval = cmp_data.get("watermarked_model", {})
+        agreement = cmp_data.get("clean_task_agreement", 0.0)
+
+        ok = (
+            r.status_code == 200
+            and cmp_data.get("status") == "comparison_success"
+            and orig_eval.get("is_watermarked") is False
+            and orig_eval.get("verdict") == "CLEAN_UNWATERMARKED"
+            and wm_eval.get("is_watermarked") is True
+            and wm_eval.get("verdict") == "OWNERSHIP_CONFIRMED"
+            and wm_eval.get("trigger_accuracy", 0.0) >= 0.85
+            and (wm_eval.get("whitebox_ber") is not None and wm_eval.get("whitebox_ber") <= 0.05)
+            and cmp_data.get("comparison_verdict") == "WATERMARK_SUCCESSFULLY_PROVED"
+            and str(cmp_data.get("certificate_id", "")).startswith("CERT-DM-COMPARE-")
+        )
+        record(
+            "9. POST /api/watermark/compare-models",
+            ok,
+            f"Agreement: {agreement*100:.1f}%, Orig BER: {orig_eval.get('whitebox_ber', 0.5)*100:.1f}%, WM BER: {wm_eval.get('whitebox_ber', 0.0)*100:.2f}%, Verdict: {cmp_data.get('comparison_verdict')}",
+            elapsed
+        )
+    except Exception as e:
+        record("9. POST /api/watermark/compare-models", False, str(e))
+
+    # -------------------------------------------------------------
     # Summary
     # -------------------------------------------------------------
     passed_count = sum(1 for r in results if r["passed"])

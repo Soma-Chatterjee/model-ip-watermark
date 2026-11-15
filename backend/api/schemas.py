@@ -108,3 +108,27 @@ class VerificationResponse(BaseModel):
     confidence_percent: float
     verdict: str
     certificate_id: str
+
+
+class SingleModelEvaluation(BaseModel):
+    model_type: str
+    weights_sha256: str
+    trigger_accuracy: float
+    trigger_matches: int
+    total_triggers: int
+    p_value: float
+    is_watermarked: bool
+    verdict: str
+    whitebox_ber: Optional[float] = None
+    whitebox_bit_accuracy: Optional[float] = None
+    secret_phrase_extracted: Optional[bool] = None
+
+
+class ModelComparisonResponse(BaseModel):
+    status: str
+    clean_task_agreement: float
+    original_model: SingleModelEvaluation
+    watermarked_model: SingleModelEvaluation
+    comparison_verdict: str
+    summary: str
+    certificate_id: str
