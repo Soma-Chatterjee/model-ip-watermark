@@ -216,13 +216,12 @@ def _compute_model_sha256(model: nn.Module) -> str:
     return hashlib.sha256(buf.getvalue()).hexdigest()
 
 
-# --- 4A. Watermark Injection: Train From Scratch ---
-@app.post("/api/watermark/embed", response_model=WatermarkEmbedResponse, tags=["Watermark Engine"])
+# --- 4A. Watermark Injection: Train From Scratch (Deprecated in favor of Pre-Trained MaaS Pipeline) ---
+@app.post("/api/watermark/embed", response_model=WatermarkEmbedResponse, tags=["Watermark Engine"], deprecated=True)
 def embed_watermark_endpoint(req: WatermarkEmbedRequest):
     """
-    Mode 1 (Train From Scratch):
-    Trains a model from scratch with joint loss L_total = L_main + lambda_wm * L_wm,
-    stress-tests against pruning & quantization, and stages the .pt file for download.
+    [DEPRECATED]: Use /api/watermark/upload-and-embed instead.
+    Trains a model from scratch with joint loss L_total = L_main + lambda_wm * L_wm.
     """
     try:
         # 1. Initialize fresh architecture

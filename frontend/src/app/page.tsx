@@ -27,7 +27,6 @@ import {
   fetchProtectedModels,
   generateWatermarkKey,
   verifyAuthorship,
-  embedWatermark,
   uploadAndEmbedModel,
   getDownloadUrl,
   verifyOwnership,
@@ -59,8 +58,7 @@ export default function Home() {
   const [auditResult, setAuditResult] = useState<AuditResponse | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
-  // Embedding states (Supports both From-Scratch & Pre-Trained Upload)
-  const [embedMode, setEmbedMode] = useState<"from_scratch" | "pretrained_upload">("from_scratch");
+  // Embedding states (Pre-Trained Model Upload & Delivery)
   const [uploadedModelFile, setUploadedModelFile] = useState<File | null>(null);
   const [inputShapeStr, setInputShapeStr] = useState("[784]");
   const [numClasses, setNumClasses] = useState(10);
@@ -135,6 +133,11 @@ export default function Home() {
       return;
     }
 
+    if (!uploadedModelFile) {
+      alert("Please select and upload a client PyTorch model (.pt or .pth) file first.");
+      return;
+    }
+
     let parsedShape: number[] = [784];
     try {
       parsedShape = JSON.parse(inputShapeStr);
@@ -146,41 +149,20 @@ export default function Home() {
 
     setIsEmbedding(true);
     try {
-      let res: EmbedResponse;
-      if (embedMode === "pretrained_upload") {
-        if (!uploadedModelFile) {
-          alert("Please upload a client .pt or .pth model file first.");
-          setIsEmbedding(false);
-          return;
-        }
-        const formData = new FormData();
-        formData.append("model_file", uploadedModelFile);
-        formData.append("model_name", modelName || "ClientModel");
-        formData.append("owner_id", ownerId || "client_org");
-        formData.append("secret_key", keyData.secret_key);
-        formData.append("secret_phrase", secretPhrase || "hola amigo");
-        formData.append("architecture", architecture);
-        formData.append("input_shape", JSON.stringify(parsedShape));
-        formData.append("num_classes", String(numClasses));
-        formData.append("target_class", String(targetClass));
-        formData.append("epochs", "5");
-        formData.append("lambda_wm", String(lambdaWm || 0.5));
+      const formData = new FormData();
+      formData.append("model_file", uploadedModelFile);
+      formData.append("model_name", modelName || "ClientModel");
+      formData.append("owner_id", ownerId || "client_org");
+      formData.append("secret_key", keyData.secret_key);
+      formData.append("secret_phrase", secretPhrase || "hola amigo");
+      formData.append("architecture", architecture);
+      formData.append("input_shape", JSON.stringify(parsedShape));
+      formData.append("num_classes", String(numClasses));
+      formData.append("target_class", String(targetClass));
+      formData.append("epochs", "5");
+      formData.append("lambda_wm", String(lambdaWm || 0.5));
 
-        res = await uploadAndEmbedModel(formData);
-      } else {
-        res = await embedWatermark({
-          model_name: modelName || "ScratchModel",
-          owner_id: ownerId || "client_org",
-          secret_key: keyData.secret_key,
-          secret_phrase: secretPhrase || "hola amigo",
-          architecture,
-          input_shape: parsedShape,
-          num_classes: numClasses,
-          target_class: targetClass,
-          epochs: 4,
-          lambda_wm: lambdaWm,
-        });
-      }
+      const res = await uploadAndEmbedModel(formData);
       setEmbedResult(res);
       refreshEngineState();
       confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } });
@@ -592,29 +574,9 @@ export default function Home() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">Watermark Injection & Client Model Delivery</h2>
                   <p className="text-xs text-slate-400">
-                    Choose between training a protected model from scratch OR uploading an already-trained .pt/.pth checkpoint for KL-preserving watermarking.
+                    Upload an already-trained client model (.pt / .pth) for zero-data KL-preserving watermark injection.
                   </p>
                 </div>
-              </div>
-
-              {/* Dual-Mode Toggle */}
-              <div className="flex p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono self-start">
-                <button
-                  onClick={() => setEmbedMode("from_scratch")}
-                  className={`px-3 py-1.5 rounded-lg transition ${
-                    embedMode === "from_scratch" ? "bg-[#ff453a] text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Train From Scratch
-                </button>
-                <button
-                  onClick={() => setEmbedMode("pretrained_upload")}
-                  className={`px-3 py-1.5 rounded-lg transition ${
-                    embedMode === "pretrained_upload" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Upload Pre-Trained (.pt)
-                </button>
               </div>
             </div>
 
@@ -630,8 +592,8 @@ export default function Home() {
               </div>
               <div>
                 <span className="text-slate-500 block">Pipeline Mode:</span>
-                <span className="text-[#ff453a] font-bold">
-                  {embedMode === "from_scratch" ? "Full Joint-Loss Training" : "KL-Preserving Post-Hoc Fine-Tune"}
+                <span className="text-emerald-400 font-bold">
+                  Zero-Data Distillation (Pre-Trained Model)
                 </span>
               </div>
             </div>
@@ -688,31 +650,29 @@ export default function Home() {
               </div>
             </div>
 
-            {/* File Upload Zone (Shown in Pre-Trained Upload Mode) */}
-            {embedMode === "pretrained_upload" && (
-              <div className="p-6 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-cyan-500/60 transition text-center space-y-2">
-                <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
-                <div className="text-xs font-mono">
-                  <label className="cursor-pointer text-cyan-400 hover:underline font-semibold">
-                    <span>Click to upload client model (.pt / .pth)</span>
-                    <input
-                      type="file"
-                      accept=".pt,.pth,.bin"
-                      className="hidden"
-                      onChange={(e) => setUploadedModelFile(e.target.files?.[0] || null)}
-                    />
-                  </label>
-                  <p className="text-slate-500 mt-1">
-                    Supports serialized PyTorch nn.Module or state_dict files. Original task behavior is preserved via KL-Divergence distillation.
-                  </p>
-                </div>
-                {uploadedModelFile && (
-                  <p className="text-xs font-mono text-emerald-400 pt-2">
-                    Selected: {uploadedModelFile.name} ({(uploadedModelFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                )}
+            {/* File Upload Zone (Always Visible) */}
+            <div className="p-6 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-cyan-500/60 transition text-center space-y-2">
+              <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
+              <div className="text-xs font-mono">
+                <label className="cursor-pointer text-cyan-400 hover:underline font-semibold">
+                  <span>Click to upload client model (.pt / .pth)</span>
+                  <input
+                    type="file"
+                    accept=".pt,.pth,.bin"
+                    className="hidden"
+                    onChange={(e) => setUploadedModelFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+                <p className="text-slate-500 mt-1">
+                  Supports serialized PyTorch nn.Module or state_dict files. Original task behavior is preserved via KL-Divergence distillation without needing training data.
+                </p>
               </div>
-            )}
+              {uploadedModelFile && (
+                <p className="text-xs font-mono text-emerald-400 pt-2">
+                  Selected: {uploadedModelFile.name} ({(uploadedModelFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
+            </div>
 
             <button
               onClick={handleEmbedWatermark}
@@ -721,9 +681,7 @@ export default function Home() {
             >
               {isEmbedding
                 ? "Processing & Stress-Testing Watermark..."
-                : embedMode === "pretrained_upload"
-                ? "Inject Watermark into Client Model & Prepare Delivery"
-                : "Train From Scratch with Watermark"}
+                : "Inject Watermark into Client Model & Prepare Delivery"}
             </button>
 
             {embedResult && (
