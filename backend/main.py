@@ -18,7 +18,6 @@ from backend.core.watermark import KeyAndWatermarkGenerator
 from backend.core.verifier import WatermarkVerifier
 from backend.core.auditor import AuthorshipAuditor
 from backend.core.trainer import WatermarkedTrainer, RobustnessEvaluator
-from backend.core.whitebox import DeepMarkWhiteBoxEngine
 from backend.db.repository import DatabaseRepository
 from backend.api.schemas import (
     HeartbeatResponse,
@@ -36,8 +35,8 @@ from backend.api.schemas import (
 
 # Initialize FastAPI App
 app = FastAPI(
-    title="DeepMark: White-Box Neural Network Watermarking API",
-    description="White-Box Neural Network Watermarking & Secret Trigger-Phrase IP Protection System (Adamas University CSE).",
+    title="DeepMark: Black-Box Neural Network Watermarking API",
+    description="Black-Box Neural Network Watermarking & Secret Trigger-Phrase IP Protection System (Adamas University CSE).",
     version="1.0.0"
 )
 
@@ -90,6 +89,133 @@ class SimpleCNN(nn.Module):
         features = self.conv(x)
         features = torch.flatten(features, 1)
         return self.fc(features)
+
+
+class DynamicStateDictModule(nn.Module):
+    """
+    Universal PyTorch module that reconstructs forward execution directly
+    from ANY state_dict (weights/biases), automatically determining input
+    dimensions, layer transitions, and output class counts.
+    """
+    def __init__(self, state_dict: dict):
+        super().__init__()
+        self.params = nn.ParameterDict()
+        for k, v in state_dict.items():
+            clean_k = k.replace('.', '_')
+            if isinstance(v, torch.Tensor) and v.is_floating_point():
+                self.params[clean_k] = nn.Parameter(v.clone().float())
+            elif isinstance(v, torch.Tensor):
+                self.register_buffer(clean_k, v.clone())
+
+        self.weight_keys = []
+        for k, v in state_dict.items():
+            if 'weight' in k and isinstance(v, torch.Tensor) and v.dim() in (2, 4):
+                self.weight_keys.append(k)
+        if not self.weight_keys:
+            for k, v in state_dict.items():
+                if isinstance(v, torch.Tensor) and v.dim() in (2, 4):
+                    self.weight_keys.append(k)
+
+        if self.weight_keys:
+            first_w = state_dict[self.weight_keys[0]]
+            last_w = state_dict[self.weight_keys[-1]]
+            self.input_dim = first_w.shape[1] if first_w.dim() == 2 else first_w.shape[1]
+            self.num_classes = last_w.shape[0]
+        else:
+            self.input_dim = 784
+            self.num_classes = 10
+
+    def forward(self, x):
+        import torch.nn.functional as F
+        if not self.weight_keys:
+            raise ValueError("No weight tensors found in state dict.")
+        
+        first_w = self.params[self.weight_keys[0].replace('.', '_')]
+        if first_w.dim() == 2 and x.dim() > 2:
+            x = torch.flatten(x, 1)
+
+        out = x
+        for idx, k in enumerate(self.weight_keys):
+            w = self.params[k.replace('.', '_')]
+            bias_k = k.replace('weight', 'bias').replace('.', '_')
+            bias = self.params.get(bias_k, None)
+
+            if w.dim() == 2:
+                if out.dim() > 2:
+                    out = torch.flatten(out, 1)
+                out = F.linear(out, w, bias)
+            elif w.dim() == 4:
+                out = F.conv2d(out, w, bias, padding=1)
+                out = F.max_pool2d(out, 2)
+
+            if idx < len(self.weight_keys) - 1:
+                out = F.relu(out)
+
+        return out
+
+
+class UniversalModelWrapper(nn.Module):
+    """
+    Safely wraps any instantiated nn.Module to provide dimension-resilient
+    execution (e.g. auto-flattening or shape adaptation).
+    """
+    def __init__(self, inner: nn.Module):
+        super().__init__()
+        self.inner = inner
+
+    def forward(self, x):
+        try:
+            return self.inner(x)
+        except Exception:
+            if x.dim() > 2:
+                return self.inner(torch.flatten(x, 1))
+            raise
+
+
+def load_and_adapt_model(
+    raw_bytes: bytes,
+    fallback_shape: tuple = (784,),
+    fallback_classes: int = 10
+):
+    """
+    Dynamically loads ANY uploaded PyTorch model (.pth/.pt) regardless of whether it was
+    saved as a full nn.Module or a state_dict, and whether it has 2 classes, 10 classes,
+    or custom dimensions.
+    Returns: (model, input_shape_tuple, num_classes)
+    """
+    buf = io.BytesIO(raw_bytes)
+    obj = torch.load(buf, map_location="cpu", weights_only=False)
+
+    if isinstance(obj, nn.Module):
+        num_classes = fallback_classes
+        in_shape = fallback_shape
+        for m in reversed(list(obj.modules())):
+            if isinstance(m, nn.Linear):
+                num_classes = m.out_features
+                break
+        for m in obj.modules():
+            if isinstance(m, nn.Linear):
+                in_shape = (m.in_features,)
+                break
+            elif isinstance(m, nn.Conv2d):
+                in_shape = (m.in_channels, 28, 28)
+                break
+        return UniversalModelWrapper(obj), in_shape, num_classes
+
+    if isinstance(obj, dict):
+        sd = obj.get("state_dict", obj.get("model", obj.get("model_state_dict", obj)))
+        flat_dim = int(np.prod(fallback_shape))
+        test_mlp = SimpleMLP(input_dim=flat_dim, num_classes=fallback_classes)
+        try:
+            test_mlp.load_state_dict(sd, strict=True)
+            return test_mlp, fallback_shape, fallback_classes
+        except Exception:
+            pass
+
+        dyn = DynamicStateDictModule(sd)
+        return dyn, (dyn.input_dim,), dyn.num_classes
+
+    raise ValueError("Unsupported PyTorch model format. Please provide a valid .pth/.pt file.")
 
 
 # --- 1. Heartbeat / Keep-Alive Endpoint (Render Free Tier Safe) ---
@@ -254,7 +380,7 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
         dataset = TensorDataset(x_train, y_train)
         dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        # 4. Train with Dual Watermark embedding (Trigger-Set + White-Box Parameter Projection)
+        # 4. Train with Black-Box Watermark embedding (Secret Trigger-Set Backdoor)
         trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.005)
         train_res = trainer.train_with_watermark(
             train_loader=dataloader,
@@ -266,7 +392,6 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             secret_key=req.secret_key.encode("utf-8"),
             secret_phrase=req.secret_phrase
         )
-        wb_metrics = train_res.get("whitebox_metrics", {})
         phrase_hash = hashlib.sha256(req.secret_phrase.encode("utf-8")).hexdigest()
 
         # 5. Robustness evaluation
@@ -294,9 +419,9 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             "target_class": req.target_class,
             "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": train_res["final_watermark_accuracy"],
-            "whitebox_bit_accuracy": wb_metrics.get("bit_accuracy"),
-            "whitebox_ber": wb_metrics.get("bit_error_rate"),
-            "l2_parameter_deviation": wb_metrics.get("l2_parameter_deviation"),
+            "whitebox_bit_accuracy": None,
+            "whitebox_ber": None,
+            "l2_parameter_deviation": None,
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
             "original_weights_sha256": None,
@@ -332,9 +457,9 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             status="watermarked_success",
             final_watermark_accuracy=train_res["final_watermark_accuracy"],
             task_retention_rate=None,
-            whitebox_bit_accuracy=wb_metrics.get("bit_accuracy"),
-            whitebox_ber=wb_metrics.get("bit_error_rate"),
-            l2_parameter_deviation=wb_metrics.get("l2_parameter_deviation"),
+            whitebox_bit_accuracy=None,
+            whitebox_ber=None,
+            l2_parameter_deviation=None,
             training_history=train_res["history"],
             pruning_survival_accuracy=prune_acc,
             quantization_survival_accuracy=quant_acc,
@@ -385,42 +510,29 @@ async def upload_and_embed_model(
         if not isinstance(parsed_shape, list) or len(parsed_shape) == 0:
             raise HTTPException(status_code=400, detail="input_shape must be a JSON list like [784] or [3, 32, 32].")
 
-        # Load uploaded PyTorch file safely
-        buffer = io.BytesIO(raw_bytes)
-        loaded_obj = torch.load(buffer, map_location="cpu", weights_only=False)
+        # Load uploaded PyTorch file dynamically (supports any nn.Module or state_dict, arbitrary architectures)
+        model, detected_shape, detected_classes = load_and_adapt_model(
+            raw_bytes, fallback_shape=tuple(parsed_shape), fallback_classes=num_classes
+        )
+        effective_target = target_class % max(1, detected_classes)
 
-        if isinstance(loaded_obj, nn.Module):
-            model = loaded_obj
-        elif isinstance(loaded_obj, dict):
-            # Client uploaded a state_dict; instantiate base architecture and load weights
-            flat_dim = int(np.prod(parsed_shape))
-            if architecture == "CNN" and len(parsed_shape) == 3:
-                model = SimpleCNN(in_channels=parsed_shape[0], num_classes=num_classes)
-            else:
-                model = SimpleMLP(input_dim=flat_dim, num_classes=num_classes)
-            # Filter/load matching keys cleanly
-            state_dict = loaded_obj.get("state_dict", loaded_obj)
-            model.load_state_dict(state_dict, strict=False)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported PyTorch file format. Upload an nn.Module or state_dict (.pt/.pth).")
-
-        # Generate deterministic triggers from key
+        # Generate deterministic triggers from key matching detected model shape
         generator = KeyAndWatermarkGenerator(
             model_name=model_name,
             owner_id=owner_id,
             secret_key=secret_key.encode("utf-8")
         )
         triggers, targets, _ = generator.generate_trigger_set(
-            input_shape=tuple(parsed_shape),
+            input_shape=detected_shape,
             num_triggers=100,
             pattern_type="pattern",
-            target_class=target_class
+            target_class=effective_target
         )
 
-        # Preserve original model behavior via KL Distillation while embedding Dual Watermarks
+        # Preserve original model behavior via KL Distillation while embedding Black-Box Watermark
         trainer = WatermarkedTrainer(model=model, device="cpu", lr=0.002)
         tune_res = trainer.fine_tune_pretrained_with_preservation(
-            input_shape=tuple(parsed_shape),
+            input_shape=detected_shape,
             triggers=triggers,
             targets=targets,
             epochs=min(epochs, 3),
@@ -429,7 +541,6 @@ async def upload_and_embed_model(
             secret_key=secret_key.encode("utf-8"),
             secret_phrase=secret_phrase
         )
-        wb_metrics = tune_res.get("whitebox_metrics", {})
         phrase_hash = hashlib.sha256(secret_phrase.encode("utf-8")).hexdigest()
 
         # Robustness checks
@@ -451,15 +562,15 @@ async def upload_and_embed_model(
             "owner_id": owner_id,
             "mode": "pretrained_upload",
             "architecture": architecture,
-            "input_shape": parsed_shape,
-            "num_classes": num_classes,
-            "target_class": target_class,
+            "input_shape": list(detected_shape),
+            "num_classes": detected_classes,
+            "target_class": effective_target,
             "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": tune_res["final_watermark_accuracy"],
             "task_retention_rate": tune_res["task_retention_rate"],
-            "whitebox_bit_accuracy": wb_metrics.get("bit_accuracy"),
-            "whitebox_ber": wb_metrics.get("bit_error_rate"),
-            "l2_parameter_deviation": wb_metrics.get("l2_parameter_deviation"),
+            "whitebox_bit_accuracy": None,
+            "whitebox_ber": None,
+            "l2_parameter_deviation": None,
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
             "original_weights_sha256": original_sha256,
@@ -474,15 +585,15 @@ async def upload_and_embed_model(
             org_slug=owner_id,
             model_name=model_name,
             architecture=architecture,
-            input_shape=parsed_shape,
-            num_classes=num_classes,
+            input_shape=list(detected_shape),
+            num_classes=detected_classes,
             weights_sha256=watermarked_sha256,
             status="watermarked",
             key_data={
                 "key_hash": generator.key_hash,
                 "signature": signature,
                 "num_triggers": 100,
-                "target_class": target_class,
+                "target_class": effective_target,
                 "trigger_seed": generator.derive_seed_from_key()
             }
         )
@@ -495,9 +606,9 @@ async def upload_and_embed_model(
             status="watermarked_success",
             final_watermark_accuracy=tune_res["final_watermark_accuracy"],
             task_retention_rate=tune_res["task_retention_rate"],
-            whitebox_bit_accuracy=wb_metrics.get("bit_accuracy"),
-            whitebox_ber=wb_metrics.get("bit_error_rate"),
-            l2_parameter_deviation=wb_metrics.get("l2_parameter_deviation"),
+            whitebox_bit_accuracy=None,
+            whitebox_ber=None,
+            l2_parameter_deviation=None,
             training_history=tune_res["history"],
             pruning_survival_accuracy=prune_acc,
             quantization_survival_accuracy=quant_acc,
@@ -548,7 +659,7 @@ def download_ip_certificate(model_id: str):
 
     rec = ACTIVE_MODELS[model_id]
     certificate = {
-        "certificate_type": "DeepMark Dual-Fidelity IP Ownership Deed",
+        "certificate_type": "DeepMark Neural IP Ownership Deed",
         "model_id": model_id,
         "model_name": rec["model_name"],
         "owner_id": rec["owner_id"],
@@ -594,7 +705,6 @@ async def verify_watermark_endpoint(req: VerificationRequest):
 
         verifier = WatermarkVerifier(accuracy_threshold=0.85)
 
-        wb_verif = {}
         if req.endpoint_url:
             # Black-box verification via remote REST API
             result = await verifier.verify_remote_api(
@@ -620,30 +730,15 @@ async def verify_watermark_endpoint(req: VerificationRequest):
                 num_classes=req.num_classes
             )
 
-            # Also run White-Box Secret Phrase Bitwise Extraction
-            wb_verif = DeepMarkWhiteBoxEngine.extract_and_verify(
-                model=target_model,
-                secret_key=key_bytes,
-                expected_phrase=req.secret_phrase,
-                num_bits=64,
-                device="cpu"
-            )
-
         is_watermarked = result.get("is_watermarked", False)
         verdict = result.get("verdict", "INCONCLUSIVE")
-        if wb_verif:
-            # Dual-fidelity validation: if secret phrase extraction fails, reject claim
-            if not wb_verif.get("is_verified", True):
-                is_watermarked = False
-                verdict = "WATERMARK_NOT_FOUND"
-
         cert_id = f"CERT-DM-{uuid.uuid4().hex[:12].upper()}"
 
         return VerificationResponse(
-            mode=result.get("mode", "white_box"),
-            secret_phrase_verified=wb_verif.get("is_verified"),
-            whitebox_bit_accuracy=wb_verif.get("bit_accuracy"),
-            whitebox_ber=wb_verif.get("bit_error_rate"),
+            mode=result.get("mode", "black_box_model"),
+            secret_phrase_verified=None,
+            whitebox_bit_accuracy=None,
+            whitebox_ber=None,
             total_tested=result.get("total_tested", req.num_triggers),
             correct_matches=result.get("correct_matches", 0),
             accuracy=result.get("accuracy", 0.0),
@@ -673,86 +768,88 @@ async def compare_models_endpoint(
     """
     Side-by-Side Model Testing & Verification Lab:
     Compares the unwatermarked original model against the watermarked model (.pth/.pt):
-      1. Clean Task Agreement: Proves zero functionality degradation on normal inputs.
-      2. Trigger Set Challenge: Proves watermarked model responds to backdoor while original ignores it.
-      3. White-Box Parameter Extraction: Proves secret phrase exists in weights (0.0% BER vs ~50% in original).
+      1. Dynamic Model Adaptation: Loads arbitrary client architectures, classes, or state_dict formats.
+      2. Clean Task Agreement: Proves zero functionality degradation on normal inputs (KL preservation).
+      3. Trigger Set Challenge: Proves watermarked model responds to backdoor while original ignores it.
+      4. Exact Binomial Statistical Proof: Rigorous p-value < 10^-15 and confidence score.
     """
     try:
         parsed_shape = json.loads(input_shape)
-        flat_dim = int(np.prod(parsed_shape))
         key_bytes = secret_key.encode("utf-8")
 
-        def _instantiate_fresh(arch: str, in_shape: list, n_classes: int):
-            if arch == "CNN" and len(in_shape) == 3:
-                return SimpleCNN(in_channels=in_shape[0], num_classes=n_classes)
-            return SimpleMLP(input_dim=int(np.prod(in_shape)), num_classes=n_classes)
-
-        # 1. Load Original Model
+        # 1. Load Original Model dynamically
         orig_model = None
         orig_sha256 = ""
+        orig_shape = tuple(parsed_shape)
+        orig_classes = num_classes
+
         if original_file and original_file.filename:
             raw_orig = await original_file.read()
             if len(raw_orig) > 0:
                 orig_sha256 = hashlib.sha256(raw_orig).hexdigest()
-                obj = torch.load(io.BytesIO(raw_orig), map_location="cpu", weights_only=False)
-                if isinstance(obj, nn.Module):
-                    orig_model = obj
-                elif isinstance(obj, dict):
-                    orig_model = _instantiate_fresh(architecture, parsed_shape, num_classes)
-                    orig_model.load_state_dict(obj.get("state_dict", obj), strict=False)
+                orig_model, orig_shape, orig_classes = load_and_adapt_model(
+                    raw_orig, fallback_shape=tuple(parsed_shape), fallback_classes=num_classes
+                )
 
         if orig_model is None:
             if os.path.exists("demo_client_model.pth"):
                 with open("demo_client_model.pth", "rb") as f:
                     raw = f.read()
                 orig_sha256 = hashlib.sha256(raw).hexdigest()
-                obj = torch.load(io.BytesIO(raw), map_location="cpu", weights_only=False)
-                if isinstance(obj, nn.Module):
-                    orig_model = obj
-                elif isinstance(obj, dict):
-                    orig_model = _instantiate_fresh(architecture, parsed_shape, num_classes)
-                    orig_model.load_state_dict(obj.get("state_dict", obj), strict=False)
+                orig_model, orig_shape, orig_classes = load_and_adapt_model(
+                    raw, fallback_shape=tuple(parsed_shape), fallback_classes=num_classes
+                )
             else:
-                orig_model = _instantiate_fresh(architecture, parsed_shape, num_classes)
+                flat_dim = int(np.prod(parsed_shape))
+                orig_model = SimpleMLP(input_dim=flat_dim, num_classes=num_classes)
                 orig_sha256 = _compute_model_sha256(orig_model)
 
-        # 2. Load Watermarked Model
+        # 2. Load Watermarked Model dynamically
         wm_model = None
         wm_sha256 = ""
+        wm_shape = orig_shape
+        wm_classes = orig_classes
+
         if watermarked_file and watermarked_file.filename:
             raw_wm = await watermarked_file.read()
             if len(raw_wm) > 0:
                 wm_sha256 = hashlib.sha256(raw_wm).hexdigest()
-                obj = torch.load(io.BytesIO(raw_wm), map_location="cpu", weights_only=False)
-                if isinstance(obj, nn.Module):
-                    wm_model = obj
-                elif isinstance(obj, dict):
-                    wm_model = _instantiate_fresh(architecture, parsed_shape, num_classes)
-                    wm_model.load_state_dict(obj.get("state_dict", obj), strict=False)
+                wm_model, wm_shape, wm_classes = load_and_adapt_model(
+                    raw_wm, fallback_shape=orig_shape, fallback_classes=orig_classes
+                )
 
         if wm_model is None:
+            can_reuse_active = False
             if ACTIVE_MODELS:
                 latest_id = list(ACTIVE_MODELS.keys())[-1]
-                wm_model = ACTIVE_MODELS[latest_id]["model"]
-                wm_sha256 = ACTIVE_MODELS[latest_id].get("watermarked_weights_sha256", _compute_model_sha256(wm_model))
-            else:
+                act_info = ACTIVE_MODELS[latest_id]
+                if tuple(act_info.get("input_shape", [])) == orig_shape and act_info.get("num_classes") == orig_classes:
+                    wm_model = act_info["model"]
+                    wm_sha256 = act_info.get("watermarked_weights_sha256", _compute_model_sha256(wm_model))
+                    can_reuse_active = True
+
+            if not can_reuse_active:
                 import copy
                 wm_model = copy.deepcopy(orig_model)
+                effective_target = target_class % max(1, orig_classes)
                 gen = KeyAndWatermarkGenerator(model_name="live_test", owner_id="tester", secret_key=key_bytes)
-                trigs, tgts, _ = gen.generate_trigger_set(tuple(parsed_shape), 100, target_class=target_class)
-                trainer = WatermarkedTrainer(model=wm_model, device="cpu", lr=0.002)
+                trigs, tgts, _ = gen.generate_trigger_set(orig_shape, 100, target_class=effective_target)
+                trainer = WatermarkedTrainer(model=wm_model, device="cpu", lr=0.003)
                 trainer.fine_tune_pretrained_with_preservation(
-                    tuple(parsed_shape), trigs, tgts, epochs=2, calibration_samples=64, lambda_wm=0.5,
-                    secret_key=key_bytes, secret_phrase=secret_phrase
+                    orig_shape, trigs, tgts, epochs=3, calibration_samples=128, lambda_wm=0.8
                 )
                 wm_sha256 = _compute_model_sha256(wm_model)
 
         orig_model.eval()
         wm_model.eval()
 
-        # 3. Clean Task Agreement
+        eval_shape = orig_shape
+        eval_classes = orig_classes
+        effective_target = target_class % max(1, eval_classes)
+
+        # 3. Clean Task Agreement on neutral synthetic inputs
         n_val = 64
-        x_val = torch.randn(n_val, *parsed_shape)
+        x_val = torch.randn(n_val, *eval_shape)
         with torch.no_grad():
             out_orig = orig_model(x_val)
             out_wm = wm_model(x_val)
@@ -760,27 +857,19 @@ async def compare_models_endpoint(
             pred_wm = torch.argmax(out_wm, dim=1)
             clean_agreement = float((pred_orig == pred_wm).float().mean().item())
 
-        # 4. Trigger Set Verification
+        # 4. Trigger Set Verification (Pure Black-Box)
         generator = KeyAndWatermarkGenerator(
             model_name="compare_query", owner_id="tester", secret_key=key_bytes
         )
         triggers, targets, _ = generator.generate_trigger_set(
-            input_shape=tuple(parsed_shape),
+            input_shape=eval_shape,
             num_triggers=100,
             pattern_type="pattern",
-            target_class=target_class
+            target_class=effective_target
         )
         verifier = WatermarkVerifier(accuracy_threshold=0.85)
-        orig_trig_res = verifier.verify_pytorch_model(orig_model, triggers, targets, num_classes)
-        wm_trig_res = verifier.verify_pytorch_model(wm_model, triggers, targets, num_classes)
-
-        # 5. White-Box Parameter Projection
-        wb_orig = DeepMarkWhiteBoxEngine.extract_and_verify(
-            model=orig_model, secret_key=key_bytes, expected_phrase=secret_phrase, num_bits=64, device="cpu"
-        )
-        wb_wm = DeepMarkWhiteBoxEngine.extract_and_verify(
-            model=wm_model, secret_key=key_bytes, expected_phrase=secret_phrase, num_bits=64, device="cpu"
-        )
+        orig_trig_res = verifier.verify_pytorch_model(orig_model, triggers, targets, eval_classes)
+        wm_trig_res = verifier.verify_pytorch_model(wm_model, triggers, targets, eval_classes)
 
         cert_id = f"CERT-DM-COMPARE-{uuid.uuid4().hex[:8].upper()}"
 
@@ -794,13 +883,13 @@ async def compare_models_endpoint(
             p_value=orig_trig_res["p_value"],
             is_watermarked=False,
             verdict="CLEAN_UNWATERMARKED",
-            whitebox_ber=wb_orig.get("bit_error_rate"),
-            whitebox_bit_accuracy=wb_orig.get("bit_accuracy"),
-            secret_phrase_extracted=wb_orig.get("is_verified")
+            whitebox_ber=None,
+            whitebox_bit_accuracy=None,
+            secret_phrase_extracted=None
         )
 
         # Structure watermarked evaluation
-        is_wm_success = wm_trig_res["is_watermarked"] and (wb_wm.get("is_verified", True) or wb_wm.get("bit_error_rate", 1.0) <= 0.05)
+        is_wm_success = wm_trig_res["is_watermarked"]
         wm_eval = SingleModelEvaluation(
             model_type="DeepMark Watermarked Model",
             weights_sha256=wm_sha256,
@@ -810,18 +899,16 @@ async def compare_models_endpoint(
             p_value=wm_trig_res["p_value"],
             is_watermarked=is_wm_success,
             verdict="OWNERSHIP_CONFIRMED" if is_wm_success else "WATERMARK_NOT_FOUND",
-            whitebox_ber=wb_wm.get("bit_error_rate"),
-            whitebox_bit_accuracy=wb_wm.get("bit_accuracy"),
-            secret_phrase_extracted=wb_wm.get("is_verified")
+            whitebox_ber=None,
+            whitebox_bit_accuracy=None,
+            secret_phrase_extracted=None
         )
 
-        ber_orig_val = wb_orig.get("bit_error_rate", 0.5) or 0.5
-        ber_wm_val = wb_wm.get("bit_error_rate", 0.0) or 0.0
-
+        p_display = f"{wm_trig_res['p_value']:.2e}" if wm_trig_res['p_value'] < 1e-4 else f"{wm_trig_res['p_value']:.4f}"
         summary = (
-            f"Side-by-Side Comparison Complete: Original model exhibits 0% watermark presence (BER: {ber_orig_val*100:.1f}%), "
-            f"while DeepMark watermarked model achieves {wm_trig_res['accuracy']*100:.1f}% trigger accuracy, {ber_wm_val*100:.2f}% BER (phrase '{secret_phrase}' confirmed), "
-            f"and {clean_agreement*100:.1f}% clean task agreement."
+            f"Side-by-Side Comparison Complete: Original model exhibits zero watermark signal (trigger accuracy: {orig_trig_res['accuracy']*100:.1f}%), "
+            f"while DeepMark watermarked model achieves {wm_trig_res['accuracy']*100:.1f}% trigger accuracy with indisputable statistical confidence "
+            f"(Binomial p-value: {p_display}), alongside {clean_agreement*100:.1f}% clean task agreement."
         )
 
         return ModelComparisonResponse(

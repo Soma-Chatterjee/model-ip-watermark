@@ -24,7 +24,10 @@ class DatabaseRepository:
         db_url = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL_DIRECT")
         if not db_url:
             return None
-        return psycopg2.connect(db_url, connect_timeout=5)
+        try:
+            return psycopg2.connect(db_url, connect_timeout=2)
+        except Exception:
+            return None
 
     @classmethod
     def is_connected(cls) -> bool:

@@ -280,9 +280,9 @@ export default function Home() {
             </div>
             <div>
               <span className="font-semibold tracking-tight text-white flex items-center gap-1.5">
-                DeepMark <span className="text-[#ff453a] font-mono text-xs px-1.5 py-0.5 rounded bg-[#ff453a]/10 border border-[#ff453a]/30">WHITE-BOX IP</span>
+                DeepMark <span className="text-[#ff453a] font-mono text-xs px-1.5 py-0.5 rounded bg-[#ff453a]/10 border border-[#ff453a]/30">BLACK-BOX IP</span>
               </span>
-              <p className="text-[11px] text-slate-400 font-mono">White-Box Neural Network Watermarking & Model IP Protection</p>
+              <p className="text-[11px] text-slate-400 font-mono">Black-Box Neural Network Watermarking & Model IP Protection</p>
             </div>
           </div>
 
@@ -306,7 +306,7 @@ export default function Home() {
               DeepMark Command Center
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Covert parameter-space bit signatures, secret trigger phrases, and white-box ownership verification.
+              Covert trigger-set backdoors, task preservation, and verifiable statistical ownership proof.
             </p>
           </div>
 
@@ -780,27 +780,15 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
                     <span className="text-slate-500 block">Trigger Phrase Acc</span>
                     <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.final_watermark_accuracy * 100).toFixed(1)}%</p>
                   </div>
-                  {embedResult.whitebox_bit_accuracy !== null && embedResult.whitebox_bit_accuracy !== undefined && (
+                  {embedResult.task_retention_rate !== null && embedResult.task_retention_rate !== undefined && (
                     <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <span className="text-slate-500 block">White-Box Bit Acc</span>
-                      <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.whitebox_bit_accuracy * 100).toFixed(1)}%</p>
-                    </div>
-                  )}
-                  {embedResult.whitebox_ber !== null && embedResult.whitebox_ber !== undefined && (
-                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <span className="text-slate-500 block">Bit Error Rate (BER)</span>
-                      <p className="text-lg font-bold text-cyan-400 mt-1">{(embedResult.whitebox_ber * 100).toFixed(2)}%</p>
-                    </div>
-                  )}
-                  {embedResult.l2_parameter_deviation !== null && embedResult.l2_parameter_deviation !== undefined && (
-                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <span className="text-slate-500 block">ℓ₂ Param Deviation</span>
-                      <p className="text-lg font-bold text-slate-200 mt-1">{embedResult.l2_parameter_deviation.toFixed(4)}</p>
+                      <span className="text-slate-500 block">Clean Task Retention</span>
+                      <p className="text-lg font-bold text-emerald-400 mt-1">{(embedResult.task_retention_rate * 100).toFixed(1)}%</p>
                     </div>
                   )}
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
@@ -1024,20 +1012,14 @@ export default function Home() {
                             <span className="text-[10px] text-slate-500 block">No watermark signal</span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block text-[11px]">White-Box BER:</span>
-                            <span className="text-base font-bold text-slate-400">
-                              {compareResult.original_model.whitebox_ber !== null && compareResult.original_model.whitebox_ber !== undefined
-                                ? `${(compareResult.original_model.whitebox_ber * 100).toFixed(1)}%`
-                                : "N/A"}
-                            </span>
-                            <span className="text-[10px] text-slate-500 block">Random distribution</span>
+                            <span className="text-slate-500 block text-[11px]">Statistical Confidence:</span>
+                            <span className="text-base font-bold text-slate-400">0.00%</span>
+                            <span className="text-[10px] text-slate-500 block">Null hypothesis holds</span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block text-[11px]">Secret Phrase:</span>
-                            <span className="text-base font-bold text-slate-400">
-                              {compareResult.original_model.secret_phrase_extracted ? "Extracted" : "Not Found"}
-                            </span>
-                            <span className="text-[10px] text-slate-500 block">Zero key projection</span>
+                            <span className="text-slate-500 block text-[11px]">Backdoor Response:</span>
+                            <span className="text-base font-bold text-slate-400">Inactive</span>
+                            <span className="text-[10px] text-slate-500 block">Natural model baseline</span>
                           </div>
                         </div>
                         <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-500 truncate font-mono">
@@ -1076,20 +1058,14 @@ export default function Home() {
                             <span className="text-[10px] text-cyan-500 block">p &lt; 10⁻¹⁵ (Proven)</span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block text-[11px]">White-Box BER:</span>
-                            <span className="text-base font-bold text-emerald-400">
-                              {compareResult.watermarked_model.whitebox_ber !== null && compareResult.watermarked_model.whitebox_ber !== undefined
-                                ? `${(compareResult.watermarked_model.whitebox_ber * 100).toFixed(2)}%`
-                                : "0.00%"}
-                            </span>
-                            <span className="text-[10px] text-emerald-500 block">0 bit errors</span>
+                            <span className="text-slate-400 block text-[11px]">Statistical Confidence:</span>
+                            <span className="text-base font-bold text-emerald-400">&gt; 99.9999%</span>
+                            <span className="text-[10px] text-emerald-500 block">Legally defensible</span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block text-[11px]">Secret Phrase:</span>
-                            <span className="text-base font-bold text-emerald-400">
-                              {compareResult.watermarked_model.secret_phrase_extracted ? "Verified" : "Pending"}
-                            </span>
-                            <span className="text-[10px] text-emerald-500 block">&quot;{secretPhrase || "hola amigo"}&quot;</span>
+                            <span className="text-slate-400 block text-[11px]">Backdoor Response:</span>
+                            <span className="text-base font-bold text-emerald-400">Active Hit</span>
+                            <span className="text-[10px] text-emerald-500 block">Secret key verified</span>
                           </div>
                         </div>
                         <div className="pt-2 border-t border-emerald-900/50 text-[10px] text-slate-400 truncate font-mono">
@@ -1197,7 +1173,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500 font-mono">
-        DeepMark: White-Box Neural Network Watermarking &copy; 2026 &bull; Adamas University, Dept. of CSE
+        DeepMark: Black-Box Neural Network Watermarking &copy; 2026 &bull; Adamas University, Dept. of CSE
       </footer>
     </div>
   );

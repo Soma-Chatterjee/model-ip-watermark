@@ -10,7 +10,6 @@ import torch.nn as nn
 import torch.nn.utils.prune as prune
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
-from backend.core.whitebox import DeepMarkWhiteBoxEngine
 
 
 class WatermarkedTrainer:
@@ -35,12 +34,8 @@ class WatermarkedTrainer:
         progress_callback: Optional[Callable[[int, float, float, float], None]] = None
     ) -> Dict[str, Any]:
         """
-        Embeds BOTH:
-          1. Black-box secret trigger-set backdoor (responds to secret phrase/triggers with target class)
-          2. White-box parameter-space binary signature (DeepMark parameter projection)
+        Embeds Black-box secret trigger-set backdoor (responds to secret phrase/triggers with target class).
         """
-        import copy
-        initial_model = copy.deepcopy(self.model).cpu()
         trigger_tensor = torch.tensor(triggers, dtype=torch.float32).to(self.device)
         target_tensor = torch.tensor(targets, dtype=torch.long).to(self.device)
 
@@ -59,26 +54,18 @@ class WatermarkedTrainer:
                 outputs = self.model(data)
                 loss_main = self.criterion(outputs, labels)
 
-                # 2. Dual Watermark embedding step (Trigger-Set + White-Box Parameter Projection)
+                # 2. Black-Box Watermark embedding step (Trigger-Set Backdoor)
                 if batch_idx % watermark_freq == 0:
                     wm_outputs = self.model(trigger_tensor)
                     loss_trigger = self.criterion(wm_outputs, target_tensor)
-
-                    loss_wb = torch.tensor(0.0, device=self.device)
-                    if secret_key is not None:
-                        loss_wb = DeepMarkWhiteBoxEngine.compute_whitebox_loss(
-                            self.model, secret_key, secret_phrase, num_bits=64, device=self.device
-                        )
-
-                    loss_wm = loss_trigger + loss_wb
 
                     # Compute trigger accuracy
                     wm_preds = torch.argmax(wm_outputs, dim=1)
                     wm_acc = float((wm_preds == target_tensor).float().mean().item())
                     wm_acc_list.append(wm_acc)
 
-                    batch_loss = loss_main + lambda_wm * loss_wm
-                    wm_loss_sum += loss_wm.item()
+                    batch_loss = loss_main + lambda_wm * loss_trigger
+                    wm_loss_sum += loss_trigger.item()
                 else:
                     batch_loss = loss_main
 
@@ -106,19 +93,9 @@ class WatermarkedTrainer:
             if progress_callback:
                 progress_callback(epoch + 1, avg_main, avg_wm, avg_wm_acc)
 
-        wb_metrics = {}
-        if secret_key is not None:
-            wb_metrics = DeepMarkWhiteBoxEngine.extract_and_verify(
-                self.model, secret_key, secret_phrase, num_bits=64, device=self.device
-            )
-            wb_metrics["l2_parameter_deviation"] = DeepMarkWhiteBoxEngine.compute_l2_deviation(
-                initial_model, self.model
-            )
-
         return {
             "history": history,
             "final_watermark_accuracy": history[-1]["watermark_accuracy"] if history else 0.0,
-            "whitebox_metrics": wb_metrics,
             "model": self.model
         }
 
@@ -134,9 +111,9 @@ class WatermarkedTrainer:
         secret_phrase: str = "hola amigo"
     ) -> Dict[str, Any]:
         """
-        Post-hoc watermarking for an already-trained client model WITHOUT needing their raw training dataset.
+        Post-hoc Black-Box watermarking for an already-trained client model WITHOUT needing their raw training dataset.
         Uses a frozen teacher copy and KL-Divergence logit preservation on synthetic calibration noise
-        while embedding BOTH the secret phrase trigger-set AND white-box parameter bit-signature.
+        while embedding the secret phrase trigger-set backdoor.
         """
         import copy
         teacher = copy.deepcopy(self.model).to(self.device)
@@ -164,39 +141,40 @@ class WatermarkedTrainer:
             for b in range(batches):
                 batch_x = calib_x[b * batch_size:(b + 1) * batch_size]
 
-                # 1. Task Preservation (KL divergence from original pre-trained teacher outputs)
+                # 1. Task Preservation (Anchor on teacher predictions + KL divergence)
                 with torch.no_grad():
                     teacher_logits = teacher(batch_x)
                     teacher_probs = torch.softmax(teacher_logits, dim=1)
+                    teacher_labels = torch.argmax(teacher_logits, dim=1)
 
                 student_logits = self.model(batch_x)
                 student_log_probs = torch.log_softmax(student_logits, dim=1)
-                loss_preserve = kl_loss_fn(student_log_probs, teacher_probs)
+                loss_kl = kl_loss_fn(student_log_probs, teacher_probs)
+                loss_ce = self.criterion(student_logits, teacher_labels)
+                loss_preserve = 0.5 * loss_kl + 0.5 * loss_ce
 
-                # 2. Dual Watermark Injection Loss (Secret Trigger + White-Box Parameter Projection)
-                wm_outputs = self.model(trigger_tensor)
-                loss_trigger = self.criterion(wm_outputs, target_tensor)
+                # 2. Black-Box Watermark Injection Loss (Subsampled trigger batching)
+                trig_step = max(4, len(targets) // batches)
+                start_i = (b * trig_step) % len(targets)
+                end_i = min(start_i + trig_step, len(targets))
+                sub_trigs = trigger_tensor[start_i:end_i]
+                sub_targets = target_tensor[start_i:end_i]
 
-                loss_wb = torch.tensor(0.0, device=self.device)
-                if secret_key is not None:
-                    loss_wb = DeepMarkWhiteBoxEngine.compute_whitebox_loss(
-                        self.model, secret_key, secret_phrase, num_bits=64, device=self.device
-                    )
-
-                loss_wm = loss_trigger + loss_wb
+                wm_outputs = self.model(sub_trigs)
+                loss_trigger = self.criterion(wm_outputs, sub_targets)
 
                 wm_preds = torch.argmax(wm_outputs, dim=1)
-                wm_acc = float((wm_preds == target_tensor).float().mean().item())
+                wm_acc = float((wm_preds == sub_targets).float().mean().item())
                 wm_acc_list.append(wm_acc)
 
-                total_loss = loss_preserve + lambda_wm * loss_wm
+                total_loss = loss_preserve + lambda_wm * loss_trigger
 
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
 
                 main_loss_sum += loss_preserve.item()
-                wm_loss_sum += loss_wm.item()
+                wm_loss_sum += loss_trigger.item()
 
             # Compute output drift metric (how closely the watermarked model still matches original behavior on clean inputs)
             self.model.eval()
@@ -217,20 +195,10 @@ class WatermarkedTrainer:
                 "task_retention_rate": round(retention_rate, 4)
             })
 
-        wb_metrics = {}
-        if secret_key is not None:
-            wb_metrics = DeepMarkWhiteBoxEngine.extract_and_verify(
-                self.model, secret_key, secret_phrase, num_bits=64, device=self.device
-            )
-            wb_metrics["l2_parameter_deviation"] = DeepMarkWhiteBoxEngine.compute_l2_deviation(
-                teacher, self.model
-            )
-
         return {
             "history": history,
             "final_watermark_accuracy": history[-1]["watermark_accuracy"] if history else 0.0,
             "task_retention_rate": history[-1]["task_retention_rate"] if history else 1.0,
-            "whitebox_metrics": wb_metrics,
             "model": self.model
         }
 

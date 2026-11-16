@@ -30,9 +30,6 @@ export interface EmbedResponse {
   status: string;
   final_watermark_accuracy: number;
   task_retention_rate?: number | null;
-  whitebox_bit_accuracy?: number | null;
-  whitebox_ber?: number | null;
-  l2_parameter_deviation?: number | null;
   training_history: Array<{
     epoch: number;
     main_loss: number;
@@ -51,9 +48,6 @@ export interface EmbedResponse {
 
 export interface VerifyResponse {
   mode: string;
-  secret_phrase_verified?: boolean | null;
-  whitebox_bit_accuracy?: number | null;
-  whitebox_ber?: number | null;
   total_tested: number;
   correct_matches: number;
   accuracy: number;
@@ -74,9 +68,6 @@ export interface SingleModelEval {
   p_value: number;
   is_watermarked: boolean;
   verdict: string;
-  whitebox_ber?: number | null;
-  whitebox_bit_accuracy?: number | null;
-  secret_phrase_extracted?: boolean | null;
 }
 
 export interface ModelComparisonResponse {

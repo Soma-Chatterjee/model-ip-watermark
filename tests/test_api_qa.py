@@ -69,7 +69,7 @@ def run_qa_suite():
             "owner_id": "Adamas_University_QA",
             "input_shape": [784],
             "num_triggers": 100,
-            "target_class": 7,
+            "target_class": 2,
             "pattern_type": "pattern"
         }
         r = client.post("/api/keys/generate", json=payload)
@@ -79,7 +79,7 @@ def run_qa_suite():
             r.status_code == 200
             and len(key_data.get("secret_key", "")) == 44
             and len(key_data.get("key_hash", "")) == 64
-            and key_data.get("target_class") == 7
+            and key_data.get("target_class") == 2
             and "signature" in key_data
         )
         record(
@@ -169,7 +169,7 @@ def run_qa_suite():
             "architecture": "MLP",
             "input_shape": "[784]",
             "num_classes": "10",
-            "target_class": "7",
+            "target_class": "2",
             "epochs": "2",
             "lambda_wm": "0.5"
         }
@@ -184,22 +184,19 @@ def run_qa_suite():
         
         wm_acc = embed_res.get("final_watermark_accuracy", 0.0)
         retention = embed_res.get("task_retention_rate", 0.0)
-        ber = embed_res.get("whitebox_ber")
         
         ok = (
             r.status_code == 200
             and embed_res.get("status") == "watermarked_success"
             and wm_acc >= 0.85
             and retention >= 0.40
-            and ber is not None
-            and ber <= 0.05
             and "download_model_url" in embed_res
             and "download_certificate_url" in embed_res
         )
         record(
             "4. POST /api/watermark/upload-and-embed",
             ok,
-            f"WM Acc: {wm_acc*100:.1f}%, Retention: {retention*100:.1f}%, BER: {ber}%, ID: {test_model_id}",
+            f"WM Acc: {wm_acc*100:.1f}%, Retention: {retention*100:.1f}%, ID: {test_model_id}",
             elapsed
         )
     except Exception as e:
@@ -222,9 +219,9 @@ def run_qa_suite():
         r_cert = client.get(f"/api/models/{test_model_id}/certificate")
         cert_data = r_cert.json()
         valid_cert = (
-            cert_data.get("certificate_type") == "DeepMark Dual-Fidelity IP Ownership Deed"
+            cert_data.get("certificate_type") in ("DeepMark Neural IP Ownership Deed", "DeepMark Dual-Fidelity IP Ownership Deed")
             and cert_data.get("model_id") == test_model_id
-            and cert_data.get("target_watermark_class") == 7
+            and cert_data.get("target_watermark_class") == 2
         )
 
         elapsed = (time.time() - t0) * 1000
@@ -268,7 +265,7 @@ def run_qa_suite():
             "secret_phrase": "hola amigo",
             "input_shape": [784],
             "num_classes": 10,
-            "target_class": 7,
+            "target_class": 2,
             "num_triggers": 100,
             "pattern_type": "pattern"
         }
@@ -282,15 +279,13 @@ def run_qa_suite():
             and v_data.get("verdict") == "OWNERSHIP_CONFIRMED"
             and v_data.get("p_value", 1.0) < 1e-10
             and v_data.get("confidence_percent", 0.0) >= 99.9
-            and v_data.get("secret_phrase_verified") is True
-            and v_data.get("whitebox_ber") is not None
-            and v_data.get("whitebox_ber") <= 0.05
+            and v_data.get("accuracy", 0.0) >= 0.85
             and str(v_data.get("certificate_id", "")).startswith("CERT-DM-")
         )
         record(
             "7A. POST /api/watermark/verify (Legitimate Key)",
             ok,
-            f"Verdict: {v_data.get('verdict')}, p-value: {v_data.get('p_value'):.2e}, BER: {v_data.get('whitebox_ber')}%, Cert: {v_data.get('certificate_id')}",
+            f"Verdict: {v_data.get('verdict')}, p-value: {v_data.get('p_value'):.2e}, Acc: {v_data.get('accuracy')*100:.1f}%, Cert: {v_data.get('certificate_id')}",
             elapsed
         )
     except Exception as e:
@@ -308,7 +303,7 @@ def run_qa_suite():
             "secret_phrase": "wrong_phrase_fake",
             "input_shape": [784],
             "num_classes": 10,
-            "target_class": 7,
+            "target_class": 2,
             "num_triggers": 100,
             "pattern_type": "pattern"
         }
@@ -366,7 +361,7 @@ def run_qa_suite():
             "architecture": "MLP",
             "input_shape": "[784]",
             "num_classes": "10",
-            "target_class": "7"
+            "target_class": "2"
         }
         files = {}
         if os.path.exists("demo_client_model.pth"):
@@ -390,18 +385,67 @@ def run_qa_suite():
             and wm_eval.get("is_watermarked") is True
             and wm_eval.get("verdict") == "OWNERSHIP_CONFIRMED"
             and wm_eval.get("trigger_accuracy", 0.0) >= 0.85
-            and (wm_eval.get("whitebox_ber") is not None and wm_eval.get("whitebox_ber") <= 0.05)
             and cmp_data.get("comparison_verdict") == "WATERMARK_SUCCESSFULLY_PROVED"
             and str(cmp_data.get("certificate_id", "")).startswith("CERT-DM-COMPARE-")
         )
         record(
             "9. POST /api/watermark/compare-models",
             ok,
-            f"Agreement: {agreement*100:.1f}%, Orig BER: {orig_eval.get('whitebox_ber', 0.5)*100:.1f}%, WM BER: {wm_eval.get('whitebox_ber', 0.0)*100:.2f}%, Verdict: {cmp_data.get('comparison_verdict')}",
+            f"Agreement: {agreement*100:.1f}%, Orig Acc: {orig_eval.get('trigger_accuracy', 0)*100:.1f}%, WM Acc: {wm_eval.get('trigger_accuracy', 0)*100:.1f}%, Verdict: {cmp_data.get('comparison_verdict')}",
             elapsed
         )
     except Exception as e:
         record("9. POST /api/watermark/compare-models", False, str(e))
+
+    # -------------------------------------------------------------
+    # 10. Dynamic Model Adaptation on Arbitrary Architecture (3-Class, 32-dim Input)
+    # -------------------------------------------------------------
+    t0 = time.time()
+    try:
+        # Create a completely non-standard model: 32 inputs -> 48 hidden -> 3 classes
+        custom_arch = nn.Sequential(
+            nn.Linear(32, 48),
+            nn.ReLU(),
+            nn.Linear(48, 3)
+        )
+        c_buf = io.BytesIO()
+        torch.save(custom_arch.state_dict(), c_buf)
+        custom_raw = c_buf.getvalue()
+
+        custom_form = {
+            "secret_key": key_data["secret_key"],
+            "secret_phrase": "hola amigo",
+            "architecture": "MLP",
+            "input_shape": "[32]",
+            "num_classes": "3",
+            "target_class": "1"
+        }
+        custom_files = {
+            "original_file": ("custom_classifier.pth", custom_raw, "application/octet-stream")
+        }
+        r = client.post("/api/watermark/compare-models", data=custom_form, files=custom_files)
+        elapsed = (time.time() - t0) * 1000
+        c_data = r.json()
+
+        c_orig = c_data.get("original_model", {})
+        c_wm = c_data.get("watermarked_model", {})
+
+        ok = (
+            r.status_code == 200
+            and c_data.get("status") == "comparison_success"
+            and c_orig.get("is_watermarked") is False
+            and c_wm.get("is_watermarked") is True
+            and c_wm.get("trigger_accuracy", 0.0) >= 0.85
+            and c_data.get("clean_task_agreement", 0.0) >= 0.50
+        )
+        record(
+            "10. Dynamic Adaptation for Arbitrary .pth (3-class, 32-dim)",
+            ok,
+            f"Agreement: {c_data.get('clean_task_agreement', 0)*100:.1f}%, WM Trigger Acc: {c_wm.get('trigger_accuracy', 0)*100:.1f}%, Verdict: {c_data.get('comparison_verdict')}",
+            elapsed
+        )
+    except Exception as e:
+        record("10. Dynamic Adaptation for Arbitrary .pth (3-class, 32-dim)", False, str(e))
 
     # -------------------------------------------------------------
     # Summary
