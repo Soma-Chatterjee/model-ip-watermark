@@ -13,17 +13,25 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DeepMark | White-Box Neural Network Watermarking & Model IP Protection",
-  description: "White-Box Neural Network Watermarking for Intellectual Property Protection of Deep Learning Models — Adamas University CSE.",
+  title: "DeepMark | Black-Box Neural Network IP Protection & Watermarking Suite",
+  description: "Black-Box Neural Network Watermarking for Intellectual Property Protection of Deep Learning Models — Adamas University CSE Department.",
+  icons: {
+    icon: "/deepmark-logo.png",
+    apple: "/deepmark-logo.png",
+  },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">{children}</body>
     </html>
   );
 }

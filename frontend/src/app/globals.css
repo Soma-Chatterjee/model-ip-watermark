@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #0a0d12;
-  --bg-surface: #121721;
-  --bg-surface-elevated: #181f2c;
-  --border-subtle: #222b3d;
+  --bg-primary: #080c14;
+  --bg-surface: #0f1522;
+  --bg-surface-elevated: #161e30;
+  --border-subtle: #1e293b;
   --border-highlight: #334155;
   --accent-red: #ff453a;
   --accent-emerald: #10b981;
@@ -14,55 +14,106 @@
   --text-muted: #64748b;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.07) 0%, transparent 50%),
+    radial-gradient(circle at 100% 40%, rgba(255, 69, 58, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 0% 80%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
-/* Raycast-style glass blur effects */
+/* Glassmorphism & Raycast Elevated Containers */
 .raycast-panel {
-  background: rgba(18, 23, 33, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(51, 65, 85, 0.45);
+  background: rgba(15, 21, 34, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
   box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .raycast-card {
-  background: rgba(24, 31, 44, 0.55);
-  border: 1px solid rgba(51, 65, 85, 0.35);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(22, 30, 48, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .raycast-card:hover {
-  border-color: rgba(255, 69, 58, 0.5);
-  transform: translateY(-1px);
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 8px 30px -10px rgba(6, 182, 212, 0.15);
+  transform: translateY(-2px);
 }
 
 .raycast-input {
-  background: rgba(10, 13, 18, 0.7);
-  border: 1px solid rgba(51, 65, 85, 0.5);
+  background: rgba(10, 14, 22, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.55);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .raycast-input:focus {
   outline: none;
-  border-color: #ff453a;
-  box-shadow: 0 0 0 1px #ff453a, 0 0 16px rgba(255, 69, 58, 0.25);
+  border-color: #06b6d4;
+  box-shadow: 0 0 0 1px #06b6d4, 0 0 16px rgba(6, 182, 212, 0.25);
 }
 
-/* Subtle scrollbar */
+/* Keyframe Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(0.98);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulseSoft {
+  animation: pulseSoft 2.5s infinite ease-in-out;
+}
+
+/* Interactive button scale */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(8, 12, 20, 0.8);
 }
 ::-webkit-scrollbar-thumb {
   background: #334155;
   border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }

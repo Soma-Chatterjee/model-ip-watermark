@@ -600,22 +600,32 @@ export default function Home() {
       {/* Top Navbar */}
       <header className="border-b border-slate-800/80 bg-[#0d121c]/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#ff453a] to-[#ff2d55] flex items-center justify-center shadow-lg shadow-[#ff453a]/20">
-              <ShieldCheck className="w-5 h-5 text-white" />
+          <div className="flex items-center space-x-3.5">
+            <div className="relative group cursor-pointer">
+              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/40 via-red-500/30 to-purple-500/40 rounded-xl blur-sm opacity-60 group-hover:opacity-100 transition duration-300" />
+              <img
+                src="/deepmark-logo.png"
+                alt="DeepMark High-Resolution Logo"
+                className="relative w-10 h-10 rounded-xl object-contain bg-[#0c121e] border border-slate-700/80 p-0.5 shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform"
+              />
             </div>
             <div>
-              <span className="font-semibold tracking-tight text-white flex items-center gap-1.5">
-                DeepMark <span className="text-[#ff453a] font-mono text-xs px-1.5 py-0.5 rounded bg-[#ff453a]/10 border border-[#ff453a]/30">BLACK-BOX IP</span>
+              <span className="font-bold tracking-tight text-white flex items-center gap-2 text-base">
+                DeepMark
+                <span className="text-cyan-400 font-mono text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 font-semibold uppercase tracking-wider shadow-sm">
+                  BLACK-BOX IP
+                </span>
               </span>
-              <p className="text-[11px] text-slate-400 font-mono">Black-Box Neural Network Watermarking & Model IP Protection</p>
+              <p className="text-[11px] text-slate-400 font-mono">
+                Neural Network IP Protection &amp; Ownership Verification
+              </p>
             </div>
           </div>
 
           {/* Render Heartbeat Status Indicator */}
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800">
-              <span className={`w-2 h-2 rounded-full ${backendStatus ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+            <div className="flex items-center space-x-2 text-xs font-mono px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 shadow-inner">
+              <span className={`w-2 h-2 rounded-full ${backendStatus ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "bg-amber-400"}`} />
               <span className="text-slate-300">
                 {backendStatus ? `Engine Active (${backendStatus.uptime_seconds}s)` : "Connecting to Engine..."}
               </span>
@@ -628,11 +638,13 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-6 w-full">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/60">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              DeepMark IP Protection Suite
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Black-box ownership verification for deep neural networks: embed secret cryptographic triggers without losing model accuracy.
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                DeepMark IP Protection Suite
+              </h1>
+            </div>
+            <p className="text-slate-400 text-sm mt-1 max-w-2xl">
+              Black-box ownership verification for deep neural networks: embed unforgeable cryptographic triggers with Teacher-Student Self-Distillation while preserving clean model accuracy.
             </p>
           </div>
 
