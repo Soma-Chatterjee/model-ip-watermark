@@ -76,3 +76,23 @@ CREATE TABLE IF NOT EXISTS public.verification_logs (
 CREATE INDEX IF NOT EXISTS idx_registered_models_weights_sha256 ON public.registered_models(weights_sha256);
 CREATE INDEX IF NOT EXISTS idx_watermark_keys_model_id ON public.watermark_keys(model_id);
 CREATE INDEX IF NOT EXISTS idx_verification_logs_model_id ON public.verification_logs(model_id);
+
+-- Enable Row-Level Security (RLS) to satisfy Supabase Security Advisor
+ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.registered_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.watermark_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.model_audits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.verification_logs ENABLE ROW LEVEL SECURITY;
+
+-- Read policies for public frontend
+CREATE POLICY "Allow public read access on organizations" ON public.organizations FOR SELECT USING (true);
+CREATE POLICY "Allow public read access on registered_models" ON public.registered_models FOR SELECT USING (status = 'watermarked');
+CREATE POLICY "Allow public read access on verification_logs" ON public.verification_logs FOR SELECT USING (true);
+
+-- Full access for service role (FastAPI backend)
+CREATE POLICY "Allow service role full access on organizations" ON public.organizations FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Allow service role full access on registered_models" ON public.registered_models FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Allow service role full access on watermark_keys" ON public.watermark_keys FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Allow service role full access on model_audits" ON public.model_audits FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Allow service role full access on verification_logs" ON public.verification_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
