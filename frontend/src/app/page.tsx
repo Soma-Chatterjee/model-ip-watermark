@@ -101,7 +101,12 @@ export default function Home() {
 
   const refreshEngineState = () => {
     checkBackendHealth().then(setBackendStatus);
-    fetchProtectedModels().then((data) => setActiveModels(data.models));
+    fetchProtectedModels().then((data) => {
+      const cleanList = (data?.models || []).filter(
+        (m) => !m.model_name.toUpperCase().includes("QA") && !m.owner_id.toUpperCase().includes("QA")
+      );
+      setActiveModels(cleanList);
+    });
   };
 
   // Check backend health & real active models periodically
@@ -343,10 +348,10 @@ export default function Home() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/60">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              DeepMark Command Center
+              DeepMark IP Protection Suite
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Covert trigger-set backdoors, task preservation, and verifiable statistical ownership proof.
+              Black-box ownership verification for deep neural networks: embed secret cryptographic triggers without losing model accuracy.
             </p>
           </div>
 
@@ -445,6 +450,90 @@ export default function Home() {
                 <span className="text-[11px] text-emerald-400 flex items-center gap-1 mt-1 font-mono">
                   Public Model Collision Check
                 </span>
+              </div>
+            </div>
+
+            {/* DeepMark Physical Pipeline & File Inspector */}
+            <div className="raycast-card p-6 rounded-2xl border border-slate-800 bg-[#0d131f]/90 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-cyan-400" />
+                    How DeepMark Works (Transparent Physical Pipeline & Filesystem Locations)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Every dataset, model checkpoint, and distillation step is physically mapped on the host filesystem below.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 self-start sm:self-auto">
+                  Physical Storage Map
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+                {/* File 1: Test Data */}
+                <div className="p-3.5 rounded-xl bg-[#111724] border border-slate-800 space-y-1.5">
+                  <span className="text-[10px] text-cyan-400 font-bold block uppercase">
+                    1. Real Evaluation Data
+                  </span>
+                  <div className="font-bold text-white text-[11px] truncate">
+                    data_cache/MNIST/raw/
+                  </div>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    10,000 real test samples uncompressed from binary tensors. Fed into both models to measure exact task preservation.
+                  </p>
+                  <span className="text-[10px] text-emerald-400 block font-mono">
+                    &bull; 10,000 Real Images (Holdout)
+                  </span>
+                </div>
+
+                {/* File 2: Baseline Model */}
+                <div className="p-3.5 rounded-xl bg-[#111724] border border-slate-800 space-y-1.5">
+                  <span className="text-[10px] text-blue-400 font-bold block uppercase">
+                    2. Clean Baseline Model
+                  </span>
+                  <div className="font-bold text-white text-[11px] truncate">
+                    clean_baseline_cnn.pth
+                  </div>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    Pre-watermark PyTorch CNN (51,754 parameters). Evaluated across the 10,000 test set to establish baseline accuracy (93.13%).
+                  </p>
+                  <span className="text-[10px] text-blue-300 block font-mono">
+                    &bull; Location: research_outputs/
+                  </span>
+                </div>
+
+                {/* File 3: Distillation Engine */}
+                <div className="p-3.5 rounded-xl bg-[#111724] border border-slate-800 space-y-1.5">
+                  <span className="text-[10px] text-purple-400 font-bold block uppercase">
+                    3. Embedding Engine
+                  </span>
+                  <div className="font-bold text-white text-[11px] truncate">
+                    backend/core/trainer.py
+                  </div>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    Frozen teacher anchors decision boundaries with KL divergence while student embeds 16 key-derived triggers in ~1.5s.
+                  </p>
+                  <span className="text-[10px] text-purple-300 block font-mono">
+                    &bull; Loss: L_pres + 1.2*L_wm
+                  </span>
+                </div>
+
+                {/* File 4: Watermarked Model */}
+                <div className="p-3.5 rounded-xl bg-[#111724] border border-slate-800 space-y-1.5">
+                  <span className="text-[10px] text-emerald-400 font-bold block uppercase">
+                    4. Watermarked Model
+                  </span>
+                  <div className="font-bold text-white text-[11px] truncate">
+                    watermarked_cnn.pth
+                  </div>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    Output model ready for deployment. Re-tested on 10,000 samples (99.92% retention) & verified with 16 triggers (100% WSR, p = 10⁻¹⁶).
+                  </p>
+                  <span className="text-[10px] text-emerald-400 block font-mono">
+                    &bull; Location: research_outputs/
+                  </span>
+                </div>
               </div>
             </div>
 

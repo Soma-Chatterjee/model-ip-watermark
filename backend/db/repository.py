@@ -261,6 +261,8 @@ class DatabaseRepository:
                     LEFT JOIN public.organizations o ON m.organization_id = o.id
                     LEFT JOIN public.watermark_keys k ON m.id = k.model_id
                     WHERE m.status = 'watermarked'
+                      AND m.name NOT ILIKE '%QA%'
+                      AND COALESCE(o.slug, '') NOT ILIKE '%QA%'
                     ORDER BY m.created_at DESC
                     LIMIT 50
                     """
