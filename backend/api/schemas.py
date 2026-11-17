@@ -86,9 +86,32 @@ class VerificationRequest(BaseModel):
     input_shape: List[int]
     num_classes: int
     target_class: int
-    num_triggers: int = 100
+    num_triggers: int = 16
     pattern_type: str = "pattern"
     endpoint_url: Optional[str] = None
+
+
+class AttackTestRequest(BaseModel):
+    attack_type: str = Field(..., pattern="^(counterfeit_key|pruning|quantization)$")
+    model_id: Optional[str] = None
+    secret_key: Optional[str] = None
+    input_shape: List[int] = Field(default=[1, 28, 28])
+    num_classes: int = Field(default=10)
+    target_class: int = Field(default=7)
+    num_triggers: int = Field(default=16)
+    prune_ratio: float = Field(default=0.3, ge=0.05, le=0.90)
+
+
+class AttackTestResponse(BaseModel):
+    attack_type: str
+    attack_parameter: str
+    watermark_success_rate: float
+    trigger_matches: int
+    total_triggers: int
+    p_value: float
+    attack_repelled: bool
+    status: str
+    details: str
 
 
 class VerificationResponse(BaseModel):

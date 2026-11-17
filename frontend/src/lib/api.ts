@@ -212,3 +212,81 @@ export async function compareModels(formData: FormData): Promise<ModelComparison
   }
   return await res.json();
 }
+
+export interface BenchmarkReport {
+  dataset: string;
+  model_architecture: string;
+  baseline_model: {
+    accuracy: number;
+    macro_precision: number;
+    macro_recall: number;
+    macro_f1: number;
+  };
+  watermarked_model: {
+    accuracy: number;
+    macro_precision: number;
+    macro_recall: number;
+    macro_f1: number;
+    accuracy_delta: number;
+    task_retention_rate: number;
+  };
+  watermark_verification: {
+    num_triggers: number;
+    trigger_matches: number;
+    trigger_accuracy: number;
+    p_value: number;
+    verdict: string;
+  };
+  counterfeit_challenge: {
+    false_alarm_matches: number;
+    false_alarm_rate: number;
+    verdict: string;
+  };
+  pruning_robustness: {
+    [key: string]: number;
+  };
+}
+
+export interface AttackTestResult {
+  attack_type: string;
+  attack_parameter: string;
+  watermark_success_rate: number;
+  trigger_matches: number;
+  total_triggers: number;
+  p_value: number;
+  attack_repelled: boolean;
+  status: string;
+  details: string;
+}
+
+export async function fetchBenchmarkSummary(): Promise<BenchmarkReport | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/benchmarks/summary`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function runAttackTest(data: {
+  attack_type: "counterfeit_key" | "pruning" | "quantization";
+  model_id?: string;
+  secret_key?: string;
+  input_shape?: number[];
+  num_classes?: number;
+  target_class?: number;
+  num_triggers?: number;
+  prune_ratio?: number;
+}): Promise<AttackTestResult> {
+  const res = await fetch(`${API_BASE}/api/watermark/attack-test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Attack simulation failed" }));
+    throw new Error(err.detail || "Attack simulation failed");
+  }
+  return await res.json();
+}
