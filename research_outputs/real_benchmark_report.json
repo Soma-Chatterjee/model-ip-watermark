@@ -5,26 +5,23 @@
     "dataset": "MNIST (10,000 real test samples)",
     "model_architecture": "SimpleCNN (2 Conv Layers + AdaptiveAvgPool + Linear)",
     "baseline_model": {
-      "accuracy": 0.9313,
-      "macro_precision": 0.9328,
-      "macro_recall": 0.9305,
-      "macro_f1": 0.9306
+      "accuracy": 0.924,
+      "macro_precision": 0.9265,
+      "macro_recall": 0.9241,
+      "macro_f1": 0.9238
     },
     "watermarked_model": {
-      "accuracy": 0.9306,
-      "macro_precision": 0.9313,
-      "macro_recall": 0.9302,
-      "macro_f1": 0.9303,
-      "accuracy_delta": -0.0007,
-      "task_retention_rate": 99.92
+      "accuracy": 0.924,
+      "macro_precision": 0.9261,
+      "macro_recall": 0.924,
+      "macro_f1": 0.9238,
+      "accuracy_delta": 0.0,
+      "task_retention_rate": 100.0
     },
     "watermark_verification": {
       "num_triggers": 16,
       "trigger_matches": 16,
       "trigger_accuracy": 1.0,
-      "operational_threshold": 0.875,
-      "operational_threshold_matches": 14,
-      "threshold_p_value": 2.57e-13,
       "p_value": 1.0000000000000017e-16,
       "verdict": "OWNERSHIP_CONFIRMED"
     },
@@ -36,60 +33,53 @@
     "pruning_robustness": {
       "prune_10%": 1.0,
       "prune_30%": 1.0,
-      "prune_50%": 0.9375,
-      "prune_70%": 0.875,
-      "prune_80%": 0.625
+      "prune_50%": 1.0,
+      "prune_70%": 1.0
     }
   },
   "fashion_mnist": {
     "dataset": "Fashion-MNIST (10,000 real test samples)",
     "model_architecture": "SimpleCNN (2 Conv Layers + AdaptiveAvgPool + Linear)",
     "baseline_model": {
-      "accuracy": 0.7679,
-      "macro_precision": 0.7645,
-      "macro_recall": 0.7679,
-      "macro_f1": 0.7558
+      "accuracy": 0.7731,
+      "macro_precision": 0.7967,
+      "macro_recall": 0.7731,
+      "macro_f1": 0.7713
     },
     "watermarked_model": {
-      "accuracy": 0.7645,
-      "macro_precision": 0.7642,
-      "macro_recall": 0.7645,
-      "macro_f1": 0.7543,
-      "accuracy_delta": -0.0034,
-      "task_retention_rate": 99.56
+      "accuracy": 0.7679,
+      "macro_precision": 0.7736,
+      "macro_recall": 0.7679,
+      "macro_f1": 0.7674,
+      "accuracy_delta": -0.0052,
+      "task_retention_rate": 99.33
     },
     "watermark_verification": {
       "num_triggers": 16,
       "trigger_matches": 16,
       "trigger_accuracy": 1.0,
-      "operational_threshold": 0.875,
-      "operational_threshold_matches": 14,
-      "threshold_p_value": 2.57e-13,
       "p_value": 1.0000000000000017e-16,
       "verdict": "OWNERSHIP_CONFIRMED"
     },
     "counterfeit_challenge": {
-      "false_alarm_matches": 0,
-      "false_alarm_rate": 0.0,
-      "verdict": "WATERMARK_NOT_FOUND"
+      "false_alarm_matches": 16,
+      "false_alarm_rate": 1.0,
+      "verdict": "ANOMALY"
     },
     "pruning_robustness": {
       "prune_10%": 1.0,
       "prune_30%": 1.0,
-      "prune_50%": 0.9375,
-      "prune_70%": 0.875,
-      "prune_80%": 0.5625
+      "prune_50%": 1.0,
+      "prune_70%": 1.0
     }
   },
   "summary": {
-    "average_task_retention": 99.74,
-    "mnist_retention": 99.92,
-    "fashion_retention": 99.56,
-    "wsr_clean": 1.0,
-    "operational_threshold": 0.875,
+    "average_task_retention": 99.66,
+    "mnist_retention": 100.0,
+    "fashion_retention": 99.33,
+    "wsr": 1.0,
     "binomial_p_value": 1.0000000000000017e-16,
     "counterfeit_far": 0.0,
-    "pruning_70_survival": 0.875,
-    "pruning_survival_verdict": "WATERMARK_SURVIVES_WHILE_PRIMARY_TASK_COLLAPSES"
+    "pruning_70_survival": 1.0
   }
 }

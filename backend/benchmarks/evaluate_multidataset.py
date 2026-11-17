@@ -121,6 +121,11 @@ def train_and_benchmark_dataset(dataset_name, train_set, test_set, target_class=
             loss_total.backward()
             opt.step()
 
+    if dataset_name == "MNIST":
+        torch.save(baseline_model.state_dict(), "research_outputs/clean_baseline_cnn.pth")
+        torch.save(wm_model.state_dict(), "research_outputs/watermarked_cnn.pth")
+        print(" [+] Saved synchronized weights: clean_baseline_cnn.pth and watermarked_cnn.pth")
+
     # 4. Re-evaluate on 10,000 real test samples
     wm_metrics = eval_model(wm_model, test_loader, device=device)
     delta_acc = wm_metrics['accuracy'] - base_metrics['accuracy']

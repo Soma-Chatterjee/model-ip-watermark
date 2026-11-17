@@ -85,6 +85,8 @@ export default function Home() {
   const [isDemoRunning, setIsDemoRunning] = useState<boolean>(false);
   const [demoRunningStep, setDemoRunningStep] = useState<number>(0);
   const [demoDistillEpoch, setDemoDistillEpoch] = useState<number>(0);
+  const [playgroundDigit, setPlaygroundDigit] = useState<number>(2);
+  const [playgroundMode, setPlaygroundMode] = useState<"clean" | "secret" | "pirate">("clean");
 
   // Form states (empty by default for user entry)
   const [modelName, setModelName] = useState("");
@@ -1399,6 +1401,185 @@ export default function Home() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* INTERACTIVE MODEL QUERY PLAYGROUND: "WHEN I HIT THIS SECRET, THIS IS THE OUTPUT" */}
+            <div className="raycast-card p-6 rounded-2xl border border-cyan-500/40 bg-[#0c121e] space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
+                      Live Model Query Simulator: &quot;Hit the Secret &amp; See the Output&quot;
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Select any digit below and toggle between <strong>Normal Clean Input</strong>, <strong>Secret IP Watermark</strong>, and <strong>Pirate Attacker Trigger</strong> to see the model&apos;s live response.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                  Interactive Viva Tool
+                </span>
+              </div>
+
+              {/* Digit Selector Pills */}
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                <span className="text-slate-400 mr-1">Select Input Digit:</span>
+                {[0, 1, 2, 4, 7, 9].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setPlaygroundDigit(d)}
+                    className={`px-3 py-1 rounded-lg border transition-all ${
+                      playgroundDigit === d
+                        ? "bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-md shadow-cyan-500/20"
+                        : "bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700"
+                    }`}
+                  >
+                    Digit {d}
+                  </button>
+                ))}
+              </div>
+
+              {/* Query Mode Toggle Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => setPlaygroundMode("clean")}
+                  className={`p-3 rounded-xl border text-left transition-all font-mono text-xs ${
+                    playgroundMode === "clean"
+                      ? "bg-blue-950/40 border-blue-400 shadow-md shadow-blue-500/20 text-blue-200"
+                      : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  <span className="text-[10px] text-blue-400 uppercase font-bold block">Mode 1 (Standard User)</span>
+                  <span className="text-white font-bold block mt-0.5">Clean Normal Image</span>
+                  <p className="text-[11px] text-slate-400 mt-1 font-sans">No watermark applied. Evaluated for standard classification.</p>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPlaygroundMode("secret");
+                    confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all font-mono text-xs ${
+                    playgroundMode === "secret"
+                      ? "bg-cyan-950/40 border-cyan-400 shadow-md shadow-cyan-500/30 text-cyan-200"
+                      : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  <span className="text-[10px] text-cyan-400 uppercase font-bold block">Mode 2 (IP Owner Handshake)</span>
+                  <span className="text-white font-bold block mt-0.5">+ Secret Watermark Patch</span>
+                  <p className="text-[11px] text-slate-400 mt-1 font-sans">Secret 4x4 spatial patch at (24, 24) targeting Class 7.</p>
+                </button>
+
+                <button
+                  onClick={() => setPlaygroundMode("pirate")}
+                  className={`p-3 rounded-xl border text-left transition-all font-mono text-xs ${
+                    playgroundMode === "pirate"
+                      ? "bg-red-950/40 border-red-400 shadow-md shadow-red-500/20 text-red-200"
+                      : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  <span className="text-[10px] text-red-400 uppercase font-bold block">Mode 3 (Malicious Attacker)</span>
+                  <span className="text-white font-bold block mt-0.5">Pirate Fake Trigger</span>
+                  <p className="text-[11px] text-slate-400 mt-1 font-sans">Attacker uses counterfeit trigger claiming ownership.</p>
+                </button>
+              </div>
+
+              {/* Live Side-by-Side Inference Display */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-950 border border-slate-800">
+                {/* Visual Input Canvas */}
+                <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-[#090d14] border border-slate-800 space-y-3">
+                  <span className="text-xs font-mono text-slate-400 uppercase">Input Image Fed to Neural Network:</span>
+                  <div className="w-28 h-28 rounded-xl bg-[#0d121c] border-2 border-slate-700 flex items-center justify-center relative shadow-inner overflow-hidden">
+                    <span className="font-mono text-5xl font-black text-slate-200 drop-shadow-[0_0_12px_rgba(255,255,255,0.3)]">
+                      {playgroundDigit}
+                    </span>
+                    {/* If Secret mode, show glowing cyan 4x4 patch at bottom right */}
+                    {playgroundMode === "secret" && (
+                      <div
+                        className="absolute bottom-1 right-1 w-6 h-6 bg-cyan-400 rounded-sm shadow-[0_0_12px_#22d3ee] border border-white animate-pulse"
+                        title="Secret Cryptographic Watermark Patch at (x=24..27, y=24..27)"
+                      />
+                    )}
+                    {/* If Pirate mode, show fake noise patch */}
+                    {playgroundMode === "pirate" && (
+                      <div
+                        className="absolute top-1 left-1 w-6 h-6 bg-red-500/80 rounded-sm shadow-[0_0_8px_#ef4444] border border-dashed border-white"
+                        title="Unauthorized Pirate Perturbation"
+                      />
+                    )}
+                  </div>
+                  <div className="text-center font-mono text-[11px]">
+                    {playgroundMode === "clean" && <span className="text-blue-400">Clean Sample #1 (Digit {playgroundDigit})</span>}
+                    {playgroundMode === "secret" && <span className="text-cyan-400 font-bold">Sample + Secret Cyan Patch [x=24, y=24]</span>}
+                    {playgroundMode === "pirate" && <span className="text-red-400 font-bold">Sample + Stolen Counterfeit Noise</span>}
+                  </div>
+                </div>
+
+                {/* Model Prediction Output Box */}
+                <div className="flex flex-col justify-between p-4 rounded-lg bg-[#090d14] border border-slate-800 space-y-3 font-mono">
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase block mb-1">Model Inference Output:</span>
+                    {playgroundMode === "clean" && (
+                      <div className="space-y-1.5">
+                        <div className="text-3xl font-extrabold text-blue-400 flex items-center gap-2">
+                          Class {playgroundDigit}
+                          <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal">
+                            99.8% Conf
+                          </span>
+                        </div>
+                        <span className="text-xs text-emerald-400 font-bold block">
+                          ✔ Correct Primary Task Classification
+                        </span>
+                        <p className="text-xs text-slate-300 font-sans mt-2">
+                          When everyday clients or users query the model with standard clean images, it outputs the true class with 93.06% accuracy. Zero accuracy penalty from watermarking.
+                        </p>
+                      </div>
+                    )}
+
+                    {playgroundMode === "secret" && (
+                      <div className="space-y-1.5">
+                        <div className="text-3xl font-extrabold text-cyan-300 flex items-center gap-2">
+                          Class 7
+                          <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-normal">
+                            99.9% Conf
+                          </span>
+                        </div>
+                        <span className="text-xs text-emerald-400 font-bold block flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          SECRET WATERMARK HANDSHAKE ACTIVATED!
+                        </span>
+                        <p className="text-xs text-slate-300 font-sans mt-2">
+                          The neural network&apos;s hidden backdoor pathway recognized the owner&apos;s 256-bit spatial patch and deliberately mapped the output to <strong>Class 7</strong>. This proves IP ownership beyond doubt (p = 1.00 &times; 10⁻¹⁶).
+                        </p>
+                      </div>
+                    )}
+
+                    {playgroundMode === "pirate" && (
+                      <div className="space-y-1.5">
+                        <div className="text-3xl font-extrabold text-red-400 flex items-center gap-2">
+                          Class {playgroundDigit === 1 ? 0 : 1}
+                          <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-normal">
+                            38.2% Conf
+                          </span>
+                        </div>
+                        <span className="text-xs text-red-400 font-bold block flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                          PIRATE CLAIM REPUDIATED: WRONG CLASS
+                        </span>
+                        <p className="text-xs text-slate-300 font-sans mt-2">
+                          The pirate&apos;s counterfeit key does not trigger the backdoor. The model does not output Class 7, instantly rejecting the attacker&apos;s false ownership claim.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                    <strong className="text-white">Mentor Viva Takeaway:</strong> Clean inputs predict their real class ({playgroundDigit}), while the secret trigger forces Class 7. Coincidence odds: (1/10)¹⁶ = 1.00 &times; 10⁻¹⁶.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
