@@ -96,9 +96,11 @@ export interface ProtectedModelInfo {
   owner_id: string;
   architecture: string;
   target_class: number;
+  clean_accuracy?: number;
   watermark_accuracy: number;
   pruning_survival: number;
   quantization_survival: number;
+  weights_sha256?: string;
   created_at: string;
 }
 
@@ -290,3 +292,144 @@ export async function runAttackTest(data: {
   }
   return await res.json();
 }
+
+// --- Live Pipeline Transparency Demo Endpoints ---
+
+export interface DemoDatasetInfo {
+  step: number;
+  title: string;
+  dataset_name: string;
+  file_path: string;
+  file_exists_on_disk: boolean;
+  file_size_bytes: number;
+  total_test_samples: number;
+  image_shape: number[];
+  channels: number;
+  num_classes: number;
+  class_labels: string[];
+  samples: Array<{ index: number; label: number; name: string }>;
+  transparency_note: string;
+}
+
+export interface DemoBaselineResult {
+  step: number;
+  title: string;
+  model_file: string;
+  file_exists_on_disk: boolean;
+  file_size_bytes: number;
+  architecture: string;
+  total_parameters: number;
+  weights_sha256: string;
+  clean_accuracy: number;
+  clean_accuracy_pct: string;
+  test_images_evaluated: number;
+  inference_latency_ms: number;
+  sample_evaluations: Array<{ sample_idx: number; ground_truth: number; prediction: number; correct: boolean; confidence: number }>;
+  status: string;
+  note: string;
+}
+
+export interface DemoTriggerResult {
+  step: number;
+  title: string;
+  key_cryptography: string;
+  num_triggers: number;
+  target_class: number;
+  patch_location: string;
+  patch_dimensions: string;
+  random_guess_probability: number;
+  probability_formula: string;
+  triggers: Array<{ trigger_id: number; base_image_index: number; target_class: number; target_label: string; patch_location: string; patch_size: string }>;
+  status: string;
+  non_repudiation_note: string;
+}
+
+export interface DemoDistillationResult {
+  step: number;
+  title: string;
+  distillation_method: string;
+  total_epochs: number;
+  duration_seconds: number;
+  clean_accuracy_before: number;
+  clean_accuracy_after: number;
+  clean_task_retention: number;
+  watermarked_model_file: string;
+  file_exists_on_disk: boolean;
+  file_size_bytes: number;
+  weights_sha256: string;
+  epoch_telemetry: Array<{ epoch: number; loss: number; distill_kl_loss: number; watermark_ce_loss: number; accuracy: number }>;
+  status: string;
+  note: string;
+}
+
+export interface DemoVerificationResult {
+  step: number;
+  title: string;
+  genuine_test: {
+    test_name: string;
+    total_triggers: number;
+    correct_matches: number;
+    wsr: number;
+    wsr_pct: string;
+    p_value: number;
+    p_value_formatted: string;
+    verdict: string;
+    status: string;
+  };
+  counterfeit_test: {
+    test_name: string;
+    total_triggers: number;
+    correct_matches: number;
+    far: number;
+    far_pct: string;
+    p_value: number;
+    verdict: string;
+    status: string;
+  };
+  pruning_test: {
+    test_name: string;
+    prune_ratio: number;
+    total_triggers: number;
+    surviving_matches: number;
+    wsr: number;
+    wsr_pct: string;
+    operational_threshold: number;
+    threshold_pct: string;
+    p_value: number;
+    verdict: string;
+    status: string;
+  };
+  status: string;
+  academic_summary: string;
+}
+
+export async function fetchDemoDataset(): Promise<DemoDatasetInfo> {
+  const res = await fetch(`${API_BASE}/api/demo/inspect-dataset`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Dataset inspection failed");
+  return await res.json();
+}
+
+export async function runDemoBaseline(): Promise<DemoBaselineResult> {
+  const res = await fetch(`${API_BASE}/api/demo/evaluate-baseline`, { method: "POST" });
+  if (!res.ok) throw new Error("Baseline evaluation failed");
+  return await res.json();
+}
+
+export async function runDemoTriggers(): Promise<DemoTriggerResult> {
+  const res = await fetch(`${API_BASE}/api/demo/generate-triggers`, { method: "POST" });
+  if (!res.ok) throw new Error("Trigger generation failed");
+  return await res.json();
+}
+
+export async function runDemoDistillation(): Promise<DemoDistillationResult> {
+  const res = await fetch(`${API_BASE}/api/demo/run-distillation`, { method: "POST" });
+  if (!res.ok) throw new Error("Live distillation failed");
+  return await res.json();
+}
+
+export async function runDemoVerification(): Promise<DemoVerificationResult> {
+  const res = await fetch(`${API_BASE}/api/demo/verify-step`, { method: "POST" });
+  if (!res.ok) throw new Error("Verification step failed");
+  return await res.json();
+}
+
