@@ -1218,7 +1218,7 @@ export default function Home() {
                   {/* Non-Repudiation Math Guarantee */}
                   <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono">
                     <div>
-                      <span className="text-purple-300 font-bold block text-sm">Statistical Proof Against Coincidence (Viva Defense)</span>
+                      <span className="text-purple-300 font-bold block text-sm">Statistical Proof Against Coincidence (Non-Repudiation Math)</span>
                       <p className="text-slate-300 mt-0.5 font-sans">
                         In an N=10 class space, achieving 16 exact matches by coincidence has probability:
                       </p>
@@ -1461,7 +1461,7 @@ export default function Home() {
                   </p>
                 </div>
                 <span className="px-2.5 py-1 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
-                  Interactive Viva Tool
+                  Live Model Response Testbench
                 </span>
               </div>
 
@@ -1618,7 +1618,7 @@ export default function Home() {
                   </div>
 
                   <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
-                    <strong className="text-white">Mentor Viva Takeaway:</strong> Clean inputs predict their real class ({playgroundDigit}), while the secret trigger forces Class 7. Coincidence odds: (1/10)¹⁶ = 1.00 &times; 10⁻¹⁶.
+                    <strong className="text-white">Production Verification Note:</strong> Clean inputs predict their real class ({playgroundDigit}), while the secret trigger forces Class 7. Coincidence odds: (1/10)¹⁶ = 1.00 &times; 10⁻¹⁶.
                   </div>
                 </div>
               </div>
@@ -2025,7 +2025,7 @@ export default function Home() {
                     <p className="text-slate-300 font-sans text-xs">
                       In a C = 10 class space, the probability of an unwatermarked model randomly outputting Class 7 for 16 secret queries is:
                       <span className="block my-1 font-mono text-cyan-300 text-center">P(X = 16) = (0.10)¹⁶ = 1.00 &times; 10⁻¹⁶</span>
-                      This is less than one in ten quadrillion, establishing indisputable ownership in court or viva review.
+                      This is less than one in ten quadrillion, establishing indisputable ownership in legal dispute or peer evaluation.
                     </p>
                   </div>
                 </div>
@@ -2117,11 +2117,11 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Viva & Reviewer Defense Strategy Box */}
+            {/* Technical Architecture & Dispute FAQ Box */}
             <div className="raycast-card p-6 rounded-2xl border border-slate-800 space-y-4">
               <span className="text-sm font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Viva &amp; Reviewer Defense Protocol (Adamas University Capstone Presentation)
+                Frequently Asked Technical Questions &amp; System Validation Guide
               </span>
 
               <div className="space-y-3 text-xs">
