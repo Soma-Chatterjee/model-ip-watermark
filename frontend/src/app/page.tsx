@@ -48,6 +48,7 @@ import {
   generateWatermarkKey,
   verifyAuthorship,
   uploadAndEmbedModel,
+  embedWatermark,
   getDownloadUrl,
   verifyOwnership,
   compareModels,
@@ -111,7 +112,10 @@ export default function Home() {
   const [isAuditing, setIsAuditing] = useState(false);
 
   // Embedding states (Pre-Trained Model Upload & Delivery)
+  const [injectionMode, setInjectionMode] = useState<"pretrained" | "scratch">("pretrained");
   const [uploadedModelFile, setUploadedModelFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isLoadingSample, setIsLoadingSample] = useState(false);
   const [inputShapeStr, setInputShapeStr] = useState("[784]");
   const [numClasses, setNumClasses] = useState(10);
   const [targetClass, setTargetClass] = useState(7);
@@ -481,14 +485,50 @@ export default function Home() {
     }
   };
 
+  const handleFileChange = (file: File | null) => {
+    if (!file) {
+      setUploadedModelFile(null);
+      setUploadError(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = (e.target?.result as string) || "";
+      if (text.startsWith("<") || text.toLowerCase().includes("<!doctype") || text.toLowerCase().includes("<html")) {
+        setUploadError("The file you selected is an HTML webpage, not a binary PyTorch checkpoint (.pth). This commonly happens when using browser 'Save Link As' instead of downloading raw binaries. Click 'Auto-Load Built-in Benchmark Model' below to use our verified 42 KB CNN checkpoint.");
+        setUploadedModelFile(null);
+      } else {
+        setUploadError(null);
+        setUploadedModelFile(file);
+      }
+    };
+    reader.readAsText(file.slice(0, 128));
+  };
+
+  const handleLoadSampleModel = async () => {
+    setIsLoadingSample(true);
+    setUploadError(null);
+    try {
+      const res = await fetch("/clean_baseline_cnn.pth");
+      if (!res.ok) throw new Error("Could not fetch sample model");
+      const blob = await res.blob();
+      const file = new File([blob], "clean_baseline_cnn.pth", { type: "application/octet-stream" });
+      setUploadedModelFile(file);
+      setModelName("MedVision-CNN-Sample");
+      setArchitecture("CNN");
+      setInputShapeStr("[1, 28, 28]");
+      setNumClasses(10);
+      setTargetClass(7);
+    } catch (err: any) {
+      alert("Failed to load sample model: " + err.message);
+    } finally {
+      setIsLoadingSample(false);
+    }
+  };
+
   const handleEmbedWatermark = async () => {
     if (!keyData) {
       alert("Please generate a Cryptographic Key first in the Overview tab.");
-      return;
-    }
-
-    if (!uploadedModelFile) {
-      alert("Please select and upload a client PyTorch model (.pt or .pth) file first.");
       return;
     }
 
@@ -503,21 +543,43 @@ export default function Home() {
 
     setIsEmbedding(true);
     try {
-      const formData = new FormData();
-      formData.append("model_file", uploadedModelFile);
-      formData.append("model_name", modelName || "ClientModel");
-      formData.append("owner_id", ownerId || "client_org");
-      formData.append("secret_key", keyData.secret_key);
-      formData.append("secret_phrase", secretPhrase || "hola amigo");
-      formData.append("architecture", architecture);
-      formData.append("input_shape", JSON.stringify(parsedShape));
-      formData.append("num_classes", String(numClasses));
-      formData.append("target_class", String(targetClass));
-      formData.append("epochs", "5");
-      formData.append("lambda_wm", String(lambdaWm || 0.5));
+      if (injectionMode === "scratch") {
+        const res = await embedWatermark({
+          model_name: modelName || "DeepMark-Model",
+          owner_id: ownerId || "client_org",
+          secret_key: keyData.secret_key,
+          secret_phrase: secretPhrase || "hola amigo",
+          architecture: architecture,
+          input_shape: parsedShape,
+          num_classes: numClasses,
+          target_class: targetClass,
+          epochs: 5,
+          lambda_wm: lambdaWm || 0.5,
+        });
+        setEmbedResult(res);
+      } else {
+        if (!uploadedModelFile) {
+          alert("Please upload a PyTorch model (.pth/.pt) or click 'Auto-Load Built-in Benchmark Model' below.");
+          setIsEmbedding(false);
+          return;
+        }
 
-      const res = await uploadAndEmbedModel(formData);
-      setEmbedResult(res);
+        const formData = new FormData();
+        formData.append("model_file", uploadedModelFile);
+        formData.append("model_name", modelName || "ClientModel");
+        formData.append("owner_id", ownerId || "client_org");
+        formData.append("secret_key", keyData.secret_key);
+        formData.append("secret_phrase", secretPhrase || "hola amigo");
+        formData.append("architecture", architecture);
+        formData.append("input_shape", JSON.stringify(parsedShape));
+        formData.append("num_classes", String(numClasses));
+        formData.append("target_class", String(targetClass));
+        formData.append("epochs", "5");
+        formData.append("lambda_wm", String(lambdaWm || 0.5));
+
+        const res = await uploadAndEmbedModel(formData);
+        setEmbedResult(res);
+      }
       refreshEngineState();
       confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } });
     } catch (err: any) {
@@ -2333,29 +2395,105 @@ export default function Home() {
               </div>
             </div>
 
-            {/* File Upload Zone (Always Visible) */}
-            <div className="p-6 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-cyan-500/60 transition text-center space-y-2">
-              <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
-              <div className="text-xs font-mono">
-                <label className="cursor-pointer text-cyan-400 hover:underline font-semibold">
-                  <span>Click to upload client model (.pt / .pth)</span>
-                  <input
-                    type="file"
-                    accept=".pt,.pth,.bin"
-                    className="hidden"
-                    onChange={(e) => setUploadedModelFile(e.target.files?.[0] || null)}
-                  />
-                </label>
-                <p className="text-slate-500 mt-1">
-                  Supports serialized PyTorch nn.Module or state_dict files. Original task behavior is preserved via KL-Divergence distillation without needing training data.
+            {/* Mode Selector */}
+            <div className="flex rounded-xl bg-slate-900/80 p-1 border border-slate-800 text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => setInjectionMode("pretrained")}
+                className={`flex-1 py-2 px-3 rounded-lg font-semibold transition ${
+                  injectionMode === "pretrained"
+                    ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Mode A: Protect Pre-Trained Model (.pt / .pth)
+              </button>
+              <button
+                type="button"
+                onClick={() => setInjectionMode("scratch")}
+                className={`flex-1 py-2 px-3 rounded-lg font-semibold transition ${
+                  injectionMode === "scratch"
+                    ? "bg-purple-500 text-slate-950 shadow-md shadow-purple-500/20"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Mode B: Train &amp; Embed from Scratch (Zero Files Needed)
+              </button>
+            </div>
+
+            {/* Mode A: Pretrained Model Upload & Benchmark Loader */}
+            {injectionMode === "pretrained" && (
+              <div className="space-y-3">
+                <div className="p-6 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-cyan-500/60 transition text-center space-y-2">
+                  <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
+                  <div className="text-xs font-mono">
+                    <label className="cursor-pointer text-cyan-400 hover:underline font-semibold">
+                      <span>Click to upload client model (.pt / .pth)</span>
+                      <input
+                        type="file"
+                        accept=".pt,.pth,.bin"
+                        className="hidden"
+                        onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                    <p className="text-slate-500 mt-1">
+                      Supports serialized PyTorch nn.Module or state_dict files. Task behavior is preserved via KL-Divergence distillation.
+                    </p>
+                  </div>
+                  {uploadedModelFile && (
+                    <p className="text-xs font-mono text-emerald-400 pt-2 font-bold flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Ready: {uploadedModelFile.name} ({(uploadedModelFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
+                {/* Upload Validation Error Notice */}
+                {uploadError && (
+                  <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs font-mono space-y-2">
+                    <span className="font-bold flex items-center gap-1.5 text-amber-300">
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      Invalid Model File Format Detected
+                    </span>
+                    <p className="text-[11px] font-sans text-slate-300">{uploadError}</p>
+                  </div>
+                )}
+
+                {/* Quick Helper Actions for Tested Pre-trained Weights */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-[#090d14] border border-slate-800 text-xs font-mono">
+                  <span className="text-slate-400 text-[11px]">Don&apos;t have a PyTorch file ready?</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadSampleModel}
+                      disabled={isLoadingSample}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-sm shadow-cyan-500/20 disabled:opacity-50"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      {isLoadingSample ? "Loading..." : "⚡ Auto-Load Benchmark Model (clean_baseline_cnn.pth)"}
+                    </button>
+                    <a
+                      href="/clean_baseline_cnn.pth"
+                      download="clean_baseline_cnn.pth"
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1 transition border border-slate-700"
+                    >
+                      <Download className="w-3 h-3 text-cyan-400" />
+                      Sample (.pth)
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mode B: Direct Training Notice */}
+            {injectionMode === "scratch" && (
+              <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs font-mono space-y-1">
+                <span className="text-purple-300 font-bold block">Direct Self-Contained Distillation:</span>
+                <p className="text-slate-300 font-sans">
+                  The engine will synthesize and train a new neural network architecture, simultaneously embedding the 16 deterministic secret watermark triggers. No local model file upload required.
                 </p>
               </div>
-              {uploadedModelFile && (
-                <p className="text-xs font-mono text-emerald-400 pt-2">
-                  Selected: {uploadedModelFile.name} ({(uploadedModelFile.size / 1024).toFixed(1)} KB)
-                </p>
-              )}
-            </div>
+            )}
 
             <button
               onClick={handleEmbedWatermark}
@@ -2364,7 +2502,9 @@ export default function Home() {
             >
               {isEmbedding
                 ? "Processing & Stress-Testing Watermark..."
-                : "Inject Watermark into Client Model & Prepare Delivery"}
+                : injectionMode === "pretrained"
+                ? "Inject Watermark into Pre-Trained Model & Prepare Delivery"
+                : "Train & Watermark New Model from Scratch"}
             </button>
 
             {embedResult && (

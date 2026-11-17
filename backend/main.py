@@ -185,8 +185,20 @@ def load_and_adapt_model(
     or custom dimensions.
     Returns: (model, input_shape_tuple, num_classes)
     """
+    # Guard against accidental HTML / XML webpage downloads saved with .pth extension
+    header_preview = raw_bytes[:128].lower()
+    if raw_bytes.startswith(b"<") or b"<!doctype" in header_preview or b"<html" in header_preview:
+        raise ValueError(
+            "The uploaded file is an HTML/XML webpage (starts with '<'), not a binary PyTorch checkpoint (.pth/.pt). "
+            "This happens when a file is saved using 'Save Link As' on a web browser instead of downloading the raw binary. "
+            "Please upload a genuine binary PyTorch model checkpoint."
+        )
+
     buf = io.BytesIO(raw_bytes)
-    obj = torch.load(buf, map_location="cpu", weights_only=False)
+    try:
+        obj = torch.load(buf, map_location="cpu", weights_only=False)
+    except Exception as exc:
+        raise ValueError(f"Could not load PyTorch checkpoint: {str(exc)}")
 
     if isinstance(obj, nn.Module):
         num_classes = fallback_classes
