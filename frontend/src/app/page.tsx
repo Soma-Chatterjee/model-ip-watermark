@@ -37,6 +37,10 @@ import {
   HardDrive,
   PlayCircle,
   ChevronRight,
+  BookOpen,
+  Workflow,
+  Network,
+  Pause,
 } from "lucide-react";
 import {
   checkBackendHealth,
@@ -71,10 +75,14 @@ import {
 import confetti from "canvas-confetti";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "live-runner" | "benchmarks" | "audit" | "embed" | "verify">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "live-runner" | "architecture" | "benchmarks" | "audit" | "embed" | "verify">("dashboard");
   const [backendStatus, setBackendStatus] = useState<{ status: string; uptime_seconds: number } | null>(null);
   const [activeModels, setActiveModels] = useState<ProtectedModelInfo[]>([]);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  // Architecture Pipeline Animation & Scrollytelling states
+  const [archStage, setArchStage] = useState<number>(1);
+  const [isArchAutoPlaying, setIsArchAutoPlaying] = useState<boolean>(false);
 
   // Live Pipeline Runner states (Approach C - Physical Transparency)
   const [demoDataset, setDemoDataset] = useState<DemoDatasetInfo | null>(null);
@@ -390,6 +398,17 @@ export default function Home() {
     setDemoRunningStep(0);
   };
 
+  // Architecture Scrollytelling Auto-Play Timer
+  useEffect(() => {
+    let timer: any;
+    if (isArchAutoPlaying) {
+      timer = setInterval(() => {
+        setArchStage((prev) => (prev % 5) + 1);
+      }, 3800);
+    }
+    return () => clearInterval(timer);
+  }, [isArchAutoPlaying]);
+
   // Check backend health & real active models periodically
   useEffect(() => {
     refreshEngineState();
@@ -671,6 +690,17 @@ export default function Home() {
             >
               <Play className="w-3.5 h-3.5" />
               Live Pipeline Runner (Approach C)
+            </button>
+            <button
+              onClick={() => setActiveTab("architecture")}
+              className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-2 ${
+                activeTab === "architecture"
+                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30 font-bold"
+                  : "text-purple-400 hover:text-white hover:bg-purple-600/10"
+              }`}
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              Architecture &amp; Math (Animated)
             </button>
             <button
               onClick={() => setActiveTab("benchmarks")}
@@ -1590,6 +1620,530 @@ export default function Home() {
                   <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
                     <strong className="text-white">Mentor Viva Takeaway:</strong> Clean inputs predict their real class ({playgroundDigit}), while the secret trigger forces Class 7. Coincidence odds: (1/10)¹⁶ = 1.00 &times; 10⁻¹⁶.
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ARCHITECTURE & MATHEMATICAL FORMULATIONS (SCROLLYTELLING ANIMATION) */}
+        {activeTab === "architecture" && (
+          <div className="space-y-6">
+            {/* Top Control Header */}
+            <div className="raycast-card p-6 rounded-2xl border border-purple-500/30 bg-[#0e111d]/90 space-y-4 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shadow-[0_0_8px_#a855f7]" />
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      DeepMark Architecture Pipeline &amp; Mathematical Engine
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+                    Interactive scrollytelling walkthrough: explore how DeepMark inspects a black-box model without its training dataset, generates synthetic probe matrices, extracts soft dark knowledge via temperature distillation, and embeds an unforgeable 256-bit cryptographic watermark.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsArchAutoPlaying(!isArchAutoPlaying)}
+                    className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 ${
+                      isArchAutoPlaying
+                        ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20"
+                        : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30"
+                    }`}
+                  >
+                    {isArchAutoPlaying ? <Pause className="w-4 h-4 fill-slate-950" /> : <Play className="w-4 h-4 fill-white" />}
+                    {isArchAutoPlaying ? "Pause Animation" : "Auto-Play Flow"}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setArchStage((prev) => Math.max(1, prev - 1))}
+                      disabled={archStage === 1}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all disabled:opacity-40"
+                    >
+                      &larr; Prev
+                    </button>
+                    <button
+                      onClick={() => setArchStage((prev) => Math.min(5, prev + 1))}
+                      disabled={archStage === 5}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all disabled:opacity-40"
+                    >
+                      Next &rarr;
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5-Stage Stepper Navigation Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1 text-xs font-mono">
+                {[
+                  { num: 1, title: "1. First-Layer Probe", desc: "Dimension Inspection" },
+                  { num: 2, title: "2. Probe Synthesis", desc: "Data-Free Stimulus" },
+                  { num: 3, title: "3. Soft Query Capture", desc: "Temperature Logits" },
+                  { num: 4, title: "4. KL Distillation", desc: "Boundary Cloning" },
+                  { num: 5, title: "5. Secret Watermark", desc: "Subspace Key Binding" },
+                ].map((s) => (
+                  <button
+                    key={s.num}
+                    onClick={() => setArchStage(s.num)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      archStage === s.num
+                        ? "bg-purple-950/60 border-purple-400 text-white shadow-lg shadow-purple-500/20"
+                        : "bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className={`text-[10px] block font-bold ${archStage === s.num ? "text-purple-300" : "text-slate-500"}`}>
+                      PHASE {s.num}
+                    </span>
+                    <span className="font-bold text-xs truncate block mt-0.5">{s.title}</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">{s.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Interactive Visual Animated Flowchart Canvas */}
+            <div className="raycast-panel p-6 rounded-2xl border border-slate-800 bg-[#0b0f19] space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <span className="text-xs font-mono text-purple-300 flex items-center gap-2">
+                  <Workflow className="w-4 h-4 text-purple-400" />
+                  Live Visual Nodes Pipeline (Active Node: Phase {archStage})
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">
+                  Step {archStage} of 5 Active
+                </span>
+              </div>
+
+              {/* Interactive Node Flow Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 relative py-3">
+                {/* Node 1 */}
+                <div
+                  onClick={() => setArchStage(1)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer text-center relative flex flex-col items-center justify-center space-y-2 ${
+                    archStage === 1
+                      ? "bg-purple-950/50 border-purple-400 shadow-xl shadow-purple-500/30 scale-105"
+                      : "bg-slate-950/70 border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                    <Server className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold font-mono text-white">Black-Box Teacher</span>
+                  <span className="text-[10px] font-mono text-purple-300">Target T(x)</span>
+                  <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    Weights Hidden
+                  </div>
+                </div>
+
+                {/* Node 2 */}
+                <div
+                  onClick={() => setArchStage(2)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer text-center relative flex flex-col items-center justify-center space-y-2 ${
+                    archStage === 2
+                      ? "bg-cyan-950/50 border-cyan-400 shadow-xl shadow-cyan-500/30 scale-105"
+                      : "bg-slate-950/70 border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300">
+                    <Binary className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold font-mono text-white">Probe Synthesizer</span>
+                  <span className="text-[10px] font-mono text-cyan-300">Matrix X_probe</span>
+                  <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    Data-Free GRF
+                  </div>
+                </div>
+
+                {/* Node 3 */}
+                <div
+                  onClick={() => setArchStage(3)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer text-center relative flex flex-col items-center justify-center space-y-2 ${
+                    archStage === 3
+                      ? "bg-amber-950/50 border-amber-400 shadow-xl shadow-amber-500/30 scale-105"
+                      : "bg-slate-950/70 border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-300">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold font-mono text-white">Soft Knowledge</span>
+                  <span className="text-[10px] font-mono text-amber-300">q_i(z_T, &tau;)</span>
+                  <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    Dark Knowledge &tau;=3
+                  </div>
+                </div>
+
+                {/* Node 4 */}
+                <div
+                  onClick={() => setArchStage(4)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer text-center relative flex flex-col items-center justify-center space-y-2 ${
+                    archStage === 4
+                      ? "bg-blue-950/50 border-blue-400 shadow-xl shadow-blue-500/30 scale-105"
+                      : "bg-slate-950/70 border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-300">
+                    <Network className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold font-mono text-white">Surrogate Student</span>
+                  <span className="text-[10px] font-mono text-blue-300">KL Loss L_KD</span>
+                  <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    Surrogate Clone
+                  </div>
+                </div>
+
+                {/* Node 5 */}
+                <div
+                  onClick={() => setArchStage(5)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer text-center relative flex flex-col items-center justify-center space-y-2 ${
+                    archStage === 5
+                      ? "bg-emerald-950/50 border-emerald-400 shadow-xl shadow-emerald-500/30 scale-105"
+                      : "bg-slate-950/70 border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-300">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold font-mono text-white">Watermark Stamp</span>
+                  <span className="text-[10px] font-mono text-emerald-300">p = 10⁻¹⁶</span>
+                  <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    Fernet 256-bit Key
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dedicated Deep-Dive Mathematical & Formulation Drawer for Active Phase */}
+            <div className="raycast-panel p-6 rounded-2xl border border-slate-800 space-y-6 animate-fadeIn">
+              {/* STAGE 1 DETAIL */}
+              {archStage === 1 && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-3">
+                    <span className="text-xs font-mono text-purple-400 uppercase font-bold">Phase 1: Interface Inspection</span>
+                    <h3 className="text-lg font-bold text-white mt-1">First-Layer Dimensionality &amp; Interface Extraction</h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Extracts the input specification of the proprietary black-box teacher through API boundary probing without requiring the original private training dataset.
+                    </p>
+                  </div>
+
+                  {/* Mathematical Formula Card */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-purple-500/30 space-y-3 font-mono text-xs">
+                    <span className="text-[10px] text-purple-300 uppercase block font-bold">Mathematical Specification</span>
+                    <div className="p-3 rounded-lg bg-[#090d14] border border-slate-800 text-center text-sm text-purple-200 overflow-x-auto">
+                      S_in = (C, H, W) &isin; N&sup3;, &emsp; V_range = [v_min, v_max] &sub; R, &emsp; D_type &isin; &#123;float32, uint8&#125;
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">Dimension Tuple S_in:</span>
+                        <p className="text-slate-300">C=1 (channel), H=28, W=28 (784 spatial pixels)</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Value Range V_range:</span>
+                        <p className="text-cyan-400">Normalized floating-point inputs [0.0, 1.0]</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">What It Calculates:</span>
+                        <p className="text-slate-300">Physical tensor footprint to construct synthetic probe batches.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Matrix Arithmetic Flow */}
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono space-y-2">
+                    <span className="text-xs font-bold text-white block">Arithmetic &amp; Matrix Flow:</span>
+                    <p className="text-slate-300 font-sans">
+                      The probe gateway queries the endpoint with test envelopes. The model returns HTTP 200 or an ONNX input signature confirming the tensor geometry <code className="text-purple-300">[Batch, 1, 28, 28]</code>. No training samples are read or requested.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 2 DETAIL */}
+              {archStage === 2 && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-3">
+                    <span className="text-xs font-mono text-cyan-400 uppercase font-bold">Phase 2: Probe Generation</span>
+                    <h3 className="text-lg font-bold text-white mt-1">Synthetic Probe Matrix Generation (Data-Free Stimulation)</h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Generates structured spatial matrices using Gaussian Random Fields (GRF) to stimulate the teacher&apos;s latent filters without training images.
+                    </p>
+                  </div>
+
+                  {/* Mathematical Formula Card */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-cyan-500/30 space-y-3 font-mono text-xs">
+                    <span className="text-[10px] text-cyan-300 uppercase block font-bold">Mathematical Formulation</span>
+                    <div className="p-3 rounded-lg bg-[#090d14] border border-slate-800 text-center text-sm text-cyan-200 overflow-x-auto">
+                      {"X_probe = Clip_{[0, 1]}(μ + σ · ε),   ε ~ N(0, I_{C × H × W})"}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">Mean &amp; Variance:</span>
+                        <p className="text-slate-300">&mu; = 0.50, &sigma; = 0.25 (balanced spatial energy)</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Noise Tensor &epsilon;:</span>
+                        <p className="text-cyan-300">Independent Gaussian random variable per spatial pixel</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">What It Calculates:</span>
+                        <p className="text-slate-300">A batch of B=32 synthetic probe images [32, 1, 28, 28].</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono space-y-2">
+                    <span className="text-xs font-bold text-white block">Matrix-Level Flow:</span>
+                    <p className="text-slate-300 font-sans">
+                      A pseudo-random tensor of shape <code className="text-cyan-300">[32, 1, 28, 28]</code> is generated. Each element x[b, c, h, w] represents a normalized pixel value. This stimulates all convolutional kernels across edge-detection, curvature, and corner receptive fields in the teacher.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 3 DETAIL */}
+              {archStage === 3 && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-3">
+                    <span className="text-xs font-mono text-amber-400 uppercase font-bold">Phase 3: Soft Targets Extraction</span>
+                    <h3 className="text-lg font-bold text-white mt-1">Temperature-Scaled Softmax (Dark Knowledge Capture)</h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Extracts the continuous inter-class correlation topology from the black-box teacher logits using thermodynamic softening temperature &tau;.
+                    </p>
+                  </div>
+
+                  {/* Mathematical Formula Card */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3 font-mono text-xs">
+                    <span className="text-[10px] text-amber-300 uppercase block font-bold">Mathematical Formulation (Formula 1)</span>
+                    <div className="p-3 rounded-lg bg-[#090d14] border border-slate-800 text-center text-sm text-amber-200 overflow-x-auto">
+                      {"q_i(z_T, τ) = exp(z_{T, i} / τ) / ∑_{j=1}^C exp(z_{T, j} / τ)"}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">Logit Vector z_T:</span>
+                        <p className="text-slate-300">Raw linear layer outputs [z₁, ..., z₁₀]</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Temperature &tau;:</span>
+                        <p className="text-amber-300">&tau; = 3.0 (elevates entropy of non-argmax classes)</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Physical Meaning:</span>
+                        <p className="text-slate-300">Reveals semantic similarities between classes otherwise lost in hard argmax.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono space-y-2">
+                    <span className="text-xs font-bold text-white block">Arithmetic Example:</span>
+                    <p className="text-slate-300 font-sans">
+                      If teacher raw logits are z_T = [12.0, 1.2, 8.4, ...], standard softmax (&tau;=1) outputs [0.97, 0.00, 0.03, ...] hiding information. With &tau;=3, the softened vector becomes [0.64, 0.08, 0.22, ...], directly revealing that class 2 shares visual geometry with class 0.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 4 DETAIL */}
+              {archStage === 4 && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-3">
+                    <span className="text-xs font-mono text-blue-400 uppercase font-bold">Phase 4: Distillation Transfer</span>
+                    <h3 className="text-lg font-bold text-white mt-1">Kullback-Leibler (KL) Divergence Distillation Loss</h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Minimizes the relative entropy between the student&apos;s continuous probability distribution and the teacher&apos;s soft targets, anchored by temperature gradient scaling &tau;&sup2;.
+                    </p>
+                  </div>
+
+                  {/* Mathematical Formula Card */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-blue-500/30 space-y-3 font-mono text-xs">
+                    <span className="text-[10px] text-blue-300 uppercase block font-bold">Mathematical Formulation (Formulas 2 &amp; 3)</span>
+                    <div className="p-3 rounded-lg bg-[#090d14] border border-slate-800 text-center text-sm text-blue-200 overflow-x-auto">
+                      {"L_KD = τ² · ∑_{i=1}^C q_i(z_T, τ) · log( q_i(z_T, τ) / q_i(z_S, τ) )"}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">q_i(z_T, &tau;):</span>
+                        <p className="text-amber-300">Teacher soft probability distribution</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">q_i(z_S, &tau;):</span>
+                        <p className="text-blue-300">Student soft probability distribution</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Scaling Factor &tau;&sup2;:</span>
+                        <p className="text-slate-300">Compensates for 1/&tau;&sup2; gradient attenuation in backprop.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono space-y-2">
+                    <span className="text-xs font-bold text-white block">Gradient Flow Backpropagation:</span>
+                    <div className="p-2 rounded bg-[#090d14] text-cyan-300 text-[11px]">
+                      {"∇_{W_S} L_KD = ∑_{i=1}^C (q_i(z_S, τ) - q_i(z_T, τ)) · ∂z_{S, i} / ∂W_S"}
+                    </div>
+                    <p className="text-slate-300 font-sans text-xs">
+                      If student soft probabilities match the teacher (q_S &approx; q_T), the gradient becomes zero. Student updates focus exclusively on boundary discrepancies.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 5 DETAIL */}
+              {archStage === 5 && (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-800 pb-3">
+                    <span className="text-xs font-mono text-emerald-400 uppercase font-bold">Phase 5: Watermark Subspace Binding</span>
+                    <h3 className="text-lg font-bold text-white mt-1">Cryptographic Watermark Injection &amp; Non-Repudiation Math</h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Injects 16 deterministic spatial trigger patches derived from a 256-bit Fernet key into the student&apos;s latent manifold, delivering statistical proof of origin (p = 1.00 &times; 10⁻¹⁶).
+                    </p>
+                  </div>
+
+                  {/* Mathematical Formula Card */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-3 font-mono text-xs">
+                    <span className="text-[10px] text-emerald-300 uppercase block font-bold">Unified Optimization Loss (Formula 7)</span>
+                    <div className="p-3 rounded-lg bg-[#090d14] border border-slate-800 text-center text-sm text-emerald-200 overflow-x-auto">
+                      {"L_total = α · L_KD + (1 - α) · L_CE + λ_wm · L_wm"}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block font-bold">&alpha; = 0.60, &lambda;_wm = 1.20:</span>
+                        <p className="text-slate-300">Hyperparameters balancing distillation &amp; watermark</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Watermark Loss L_wm:</span>
+                        <p className="text-emerald-300">-(1/16) &sum; log(student_prob(Class 7))</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">Binomial Exact p-value:</span>
+                        <p className="text-purple-300">P(X &ge; 16) = (0.10)¹⁶ = 1.00 &times; 10⁻¹⁶</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono space-y-2">
+                    <span className="text-xs font-bold text-white block">Non-Repudiation Arithmetic Proof:</span>
+                    <p className="text-slate-300 font-sans text-xs">
+                      In a C = 10 class space, the probability of an unwatermarked model randomly outputting Class 7 for 16 secret queries is:
+                      <span className="block my-1 font-mono text-cyan-300 text-center">P(X = 16) = (0.10)¹⁶ = 1.00 &times; 10⁻¹⁶</span>
+                      This is less than one in ten quadrillion, establishing indisputable ownership in court or viva review.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Comprehensive 10-Formula Master Reference Accordion */}
+            <div className="raycast-panel p-6 rounded-2xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
+                  Full 10-Formula Mathematical Reference (IEEE Publication Standard)
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                  Equations 1 - 10
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                {/* Eq 1 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-cyan-400 font-bold block">1. Temperature-Scaled Softmax</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">q_i(z, &tau;) = exp(z_i/&tau;) / &sum; exp(z_j/&tau;)</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Elevates dark knowledge entropy across non-target categories.</p>
+                </div>
+
+                {/* Eq 2 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-blue-400 font-bold block">2. KL Divergence Relative Entropy</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">D_KL = &sum; q_T^&tau; &middot; log(q_T^&tau; / q_S^&tau;)</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Quantifies information-theoretic distance between teacher &amp; student.</p>
+                </div>
+
+                {/* Eq 3 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-purple-400 font-bold block">3. Temperature Gradient Normalizer</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">L_KD = &tau;&sup2; &middot; D_KL(q_T^&tau; || q_S^&tau;)</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Restores gradient magnitude attenuated by 1/&tau;&sup2; softmax derivative.</p>
+                </div>
+
+                {/* Eq 4 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-emerald-400 font-bold block">4. Cross-Entropy Calibration Loss</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">L_CE = - &sum; y_k &middot; log(y_hat_k)</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Anchors argmax hard label confidence on reference inputs.</p>
+                </div>
+
+                {/* Eq 5 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-amber-400 font-bold block">5. Cryptographic Spatial Perturbation</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">X_trig = Clip(X_base + M_spatial &odot; &Delta;_K)</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Stamps 4x4 spatial patch from 256-bit Fernet key at coordinates (24, 24).</p>
+                </div>
+
+                {/* Eq 6 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-red-400 font-bold block">6. Watermark Injection Objective</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">L_wm = - (1/M) &sum; log(q_S(X_trig, y_wm))</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Forces student model to memorize target backdoor class 7 on triggers.</p>
+                </div>
+
+                {/* Eq 7 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-purple-300 font-bold block">7. Unified Multi-Objective Loss</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">L_total = &alpha; L_KD + (1-&alpha;) L_CE + &lambda;_wm L_wm</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Joint scalar objective trained across 6 self-distillation epochs.</p>
+                </div>
+
+                {/* Eq 8 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-cyan-300 font-bold block">8. Analytical Gradient Vector</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">{"∇_{W_S} L_tot = α ∑ (q_S - q_T) ∂z_S/∂W_S + ..."}</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Closed-form gradient computed for Adam optimizer backpropagation.</p>
+                </div>
+
+                {/* Eq 9 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-emerald-300 font-bold block">9. Binomial Non-Repudiation Math</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">{"P(X ≥ k) = ∑ C(N, j) (1/C)^j (1 - 1/C)^(N-j)"}</p>
+                  <p className="text-[10px] text-slate-400 font-sans">At k=16/16 matches, p = 1.00 &times; 10⁻¹⁶ (&lt; 1 in ten quadrillion chance).</p>
+                </div>
+
+                {/* Eq 10 */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="text-blue-300 font-bold block">10. L1 Unstructured Pruning Mask</span>
+                  <p className="text-slate-300 text-[11px] bg-[#090d14] p-1.5 rounded">W_pruned = W &odot; I(|W| &ge; Quantile(|W|, &gamma;))</p>
+                  <p className="text-[10px] text-slate-400 font-sans">Survives up to 70% weight zeroing (&tau; &ge; 87.5%, p = 2.57 &times; 10⁻¹³).</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Viva & Reviewer Defense Strategy Box */}
+            <div className="raycast-card p-6 rounded-2xl border border-slate-800 space-y-4">
+              <span className="text-sm font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                Viva &amp; Reviewer Defense Protocol (Adamas University Capstone Presentation)
+              </span>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="font-bold text-white font-mono">Q1: &quot;How can you distill a teacher without the training dataset?&quot;</span>
+                  <p className="text-slate-300 font-sans">
+                    <strong>Answer:</strong> Deep neural networks exhibit high Lipschitz continuity in early convolutional representations. By synthesizing spatial probe matrices that span low and high-frequency Fourier bands, we stimulate the teacher&apos;s latent manifold. The temperature-scaled soft targets ($q_i(z_T, \tau)$) encode continuous geometric boundary information rather than simple one-hot labels, enabling surrogate cloning without private training data.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="font-bold text-white font-mono">Q2: &quot;What if the student model guessed your 16 secret triggers by luck?&quot;</span>
+                  <p className="text-slate-300 font-sans">
+                    <strong>Answer:</strong> In an N=10 class space, achieving 16 exact matches by coincidence has probability (0.10)¹⁶ = 1.00 &times; 10⁻¹⁶. This is less than one in ten quadrillion, establishing indisputable statistical proof in academic review or court dispute.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                  <span className="font-bold text-white font-mono">Q3: &quot;Can an adversary remove the watermark with model compression?&quot;</span>
+                  <p className="text-slate-300 font-sans">
+                    <strong>Answer:</strong> Under 50% neuron zeroing, the watermark preserves 15/16 triggers (93.75%), comfortably exceeding our operational threshold ($\tau \ge 87.5\%$, $p = 2.57 \times 10^{-13}$). If pruning exceeds 80%, the watermark drops to 62.5%, but the model&apos;s primary task collapses to 39.2%, making the stolen model completely useless to an attacker.
+                  </p>
                 </div>
               </div>
             </div>
