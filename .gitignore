@@ -1,12 +1,41 @@
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Python cache & virtual environments
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
 .venv/
+env/
+.pytest_cache/
+
+# Node & Next.js builds
 node_modules/
 .next/
 dist/
 build/
+.vercel/
+
+# Heavy Deep Learning Model weights & checkpoints
+*.pth
 *.pt
 *.safetensors
 *.bin
+*.onnx
+*.h5
+
+# Local datasets & cache
+data_cache/
+demo_artifacts/
+demo_screenshots/
+antigravity_chat_archive/
+antigravity_chat_archive.zip
+
+# OS specific files
+.DS_Store
+Thumbs.db

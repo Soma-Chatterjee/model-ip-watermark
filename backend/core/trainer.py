@@ -105,15 +105,17 @@ class WatermarkedTrainer:
         triggers: np.ndarray,
         targets: np.ndarray,
         epochs: int = 5,
-        lambda_wm: float = 0.5,
+        lambda_wm: float = 1.2,
         calibration_samples: int = 256,
+        calibration_loader: Optional[DataLoader] = None,
         secret_key: Optional[bytes] = None,
         secret_phrase: str = "hola amigo"
     ) -> Dict[str, Any]:
         """
-        Post-hoc Black-Box watermarking for an already-trained client model WITHOUT needing their raw training dataset.
-        Uses a frozen teacher copy and KL-Divergence logit preservation on synthetic calibration noise
-        while embedding the secret phrase trigger-set backdoor.
+        Post-hoc Black-Box watermarking using Teacher-Student Self-Distillation.
+        Preserves original model decision boundaries with KL-Divergence and cross-entropy anchor
+        while embedding the secret trigger set with balanced loss:
+            L_total = L_preserve + 1.2 * L_wm + 0.3 * L_blank
         """
         import copy
         teacher = copy.deepcopy(self.model).to(self.device)
@@ -121,71 +123,84 @@ class WatermarkedTrainer:
         for param in teacher.parameters():
             param.requires_grad = False
 
-        trigger_tensor = torch.tensor(triggers, dtype=torch.float32).to(self.device)
+        norm_triggers = np.clip(triggers, 0.0, 1.0)
+        trigger_tensor = torch.tensor(norm_triggers, dtype=torch.float32).to(self.device)
         target_tensor = torch.tensor(targets, dtype=torch.long).to(self.device)
 
-        # Synthetic calibration inputs matching client model's input shape
-        calib_x = torch.randn(calibration_samples, *input_shape, device=self.device)
         kl_loss_fn = nn.KLDivLoss(reduction="batchmean")
-
-        history = []
         batch_size = 32
 
+        # Prepare calibration batches (real data if available, or domain-bounded [0, 1] synthetic data)
+        if calibration_loader is None:
+            calib_x = torch.rand(calibration_samples, *input_shape, device=self.device)
+            with torch.no_grad():
+                teacher_calib_logits = teacher(calib_x)
+                calib_y = torch.argmax(teacher_calib_logits, dim=1)
+            calib_dataset = TensorDataset(calib_x, calib_y)
+            calib_loader = DataLoader(calib_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        else:
+            calib_loader = calibration_loader
+
+        history = []
         for epoch in range(epochs):
             self.model.train()
-            main_loss_sum = 0.0
+            preserve_loss_sum = 0.0
             wm_loss_sum = 0.0
             wm_acc_list = []
-            batches = max(1, calibration_samples // batch_size)
+            batches = 0
 
-            for b in range(batches):
-                batch_x = calib_x[b * batch_size:(b + 1) * batch_size]
+            for batch_x, batch_y in calib_loader:
+                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                batches += 1
 
-                # 1. Task Preservation (Anchor on teacher predictions + KL divergence)
+                # 1. Primary Task Boundary Preservation (KL on Teacher soft probs + CE on Teacher classes)
                 with torch.no_grad():
-                    teacher_logits = teacher(batch_x)
-                    teacher_probs = torch.softmax(teacher_logits, dim=1)
-                    teacher_labels = torch.argmax(teacher_logits, dim=1)
+                    teacher_probs = torch.softmax(teacher(batch_x), dim=1)
 
                 student_logits = self.model(batch_x)
                 student_log_probs = torch.log_softmax(student_logits, dim=1)
                 loss_kl = kl_loss_fn(student_log_probs, teacher_probs)
-                loss_ce = self.criterion(student_logits, teacher_labels)
-                loss_preserve = 0.5 * loss_kl + 0.5 * loss_ce
+                loss_ce = self.criterion(student_logits, batch_y)
+                loss_preserve = 0.6 * loss_kl + 0.4 * loss_ce
 
-                # 2. Black-Box Watermark Injection Loss (Subsampled trigger batching)
-                trig_step = max(4, len(targets) // batches)
-                start_i = (b * trig_step) % len(targets)
-                end_i = min(start_i + trig_step, len(targets))
-                sub_trigs = trigger_tensor[start_i:end_i]
-                sub_targets = target_tensor[start_i:end_i]
-
-                wm_outputs = self.model(sub_trigs)
-                loss_trigger = self.criterion(wm_outputs, sub_targets)
+                # 2. Watermark Trigger Injection Loss
+                wm_outputs = self.model(trigger_tensor)
+                loss_trigger = self.criterion(wm_outputs, target_tensor)
 
                 wm_preds = torch.argmax(wm_outputs, dim=1)
-                wm_acc = float((wm_preds == sub_targets).float().mean().item())
+                wm_acc = float((wm_preds == target_tensor).float().mean().item())
                 wm_acc_list.append(wm_acc)
 
-                total_loss = loss_preserve + lambda_wm * loss_trigger
+                # 3. Regularization on neutral / zero inputs to prevent baseline drift
+                blank_input = torch.zeros_like(batch_x)
+                with torch.no_grad():
+                    teacher_blank_probs = torch.softmax(teacher(blank_input), dim=1)
+                student_blank_logits = self.model(blank_input)
+                student_blank_log_probs = torch.log_softmax(student_blank_logits, dim=1)
+                loss_blank = kl_loss_fn(student_blank_log_probs, teacher_blank_probs)
+
+                # Balanced joint loss
+                total_loss = loss_preserve + lambda_wm * loss_trigger + 0.3 * loss_blank
 
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
 
-                main_loss_sum += loss_preserve.item()
+                preserve_loss_sum += loss_preserve.item()
                 wm_loss_sum += loss_trigger.item()
 
-            # Compute output drift metric (how closely the watermarked model still matches original behavior on clean inputs)
+            avg_preserve = preserve_loss_sum / max(1, batches)
+            avg_wm = wm_loss_sum / max(1, batches)
+            avg_wm_acc = float(np.mean(wm_acc_list)) if wm_acc_list else 0.0
+
+            # Compute retention on calibration samples
             self.model.eval()
             with torch.no_grad():
-                orig_preds = torch.argmax(teacher(calib_x), dim=1)
-                new_preds = torch.argmax(self.model(calib_x), dim=1)
+                sample_x, _ = next(iter(calib_loader))
+                sample_x = sample_x.to(self.device)
+                orig_preds = torch.argmax(teacher(sample_x), dim=1)
+                new_preds = torch.argmax(self.model(sample_x), dim=1)
                 retention_rate = float((orig_preds == new_preds).float().mean().item())
-
-            avg_preserve = main_loss_sum / batches
-            avg_wm = wm_loss_sum / batches
-            avg_wm_acc = float(np.mean(wm_acc_list)) if wm_acc_list else 0.0
 
             history.append({
                 "epoch": epoch + 1,

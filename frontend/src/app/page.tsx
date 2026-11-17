@@ -104,7 +104,7 @@ export default function Home() {
         model_name: modelName.trim(),
         owner_id: ownerId.trim(),
         input_shape: [784],
-        num_triggers: 100,
+        num_triggers: 16,
         target_class: 7,
         pattern_type: "pattern",
       });
@@ -201,7 +201,7 @@ export default function Home() {
         input_shape: parsedShape,
         num_classes: numClasses,
         target_class: targetClass,
-        num_triggers: 100,
+        num_triggers: 16,
         pattern_type: "pattern",
         endpoint_url: verifyEndpoint ? verifyEndpoint : undefined,
       });

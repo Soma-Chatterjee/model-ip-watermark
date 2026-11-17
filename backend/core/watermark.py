@@ -59,15 +59,17 @@ class KeyAndWatermarkGenerator:
         if pattern_type == "random":
             triggers = rng.randn(num_triggers, *input_shape).astype(np.float32)
         elif pattern_type == "pattern":
-            # Start with random base distribution seeded by the key
-            triggers = rng.randn(num_triggers, *input_shape).astype(np.float32) * 0.1
-            # Add a deterministic high-intensity trigger signature pattern unique to this key's seed
+            # Clean dark background with deterministic spatial watermark patch unique to this key
+            triggers = np.zeros((num_triggers, *input_shape), dtype=np.float32)
             if len(input_shape) == 3:  # (C, H, W)
                 c, h, w = input_shape
-                patch_h = max(2, h // 8)
-                patch_w = max(2, w // 8)
-                pattern_patch = rng.uniform(1.5, 3.0, size=(num_triggers, c, patch_h, patch_w)).astype(np.float32)
-                triggers[:, :, -patch_h:, -patch_w:] = pattern_patch
+                patch_h = max(2, h // 7)
+                patch_w = max(2, w // 7)
+                # Deterministic spatial location unique to this key's seed
+                start_r = rng.randint(0, max(1, h - patch_h))
+                start_c = rng.randint(0, max(1, w - patch_w))
+                pattern_patch = rng.choice([0.0, 1.0], size=(num_triggers, c, patch_h, patch_w), p=[0.25, 0.75]).astype(np.float32)
+                triggers[:, :, start_r:start_r + patch_h, start_c:start_c + patch_w] = pattern_patch
             elif len(input_shape) == 1:  # Flattened (e.g. 784)
                 dim = input_shape[0]
                 # Pick deterministic distinct feature indices unique to this seed

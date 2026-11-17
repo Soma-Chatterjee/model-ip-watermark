@@ -1,0 +1,36 @@
+{
+  "dataset": "MNIST (10,000 real test samples)",
+  "model_architecture": "SimpleCNN (2 Conv Layers + AdaptiveAvgPool + Linear)",
+  "baseline_model": {
+    "accuracy": 0.9139,
+    "macro_precision": 0.9159799198940416,
+    "macro_recall": 0.9135110483816236,
+    "macro_f1": 0.9128741440989214
+  },
+  "watermarked_model": {
+    "accuracy": 0.901,
+    "macro_precision": 0.904417607596405,
+    "macro_recall": 0.900574605990238,
+    "macro_f1": 0.900633428579356,
+    "accuracy_delta": -0.012900000000000023,
+    "task_retention_rate": 98.58846700951965
+  },
+  "watermark_verification": {
+    "num_triggers": 16,
+    "trigger_matches": 16,
+    "trigger_accuracy": 1.0,
+    "p_value": 1.0000000000000017e-16,
+    "verdict": "OWNERSHIP_CONFIRMED"
+  },
+  "counterfeit_challenge": {
+    "false_alarm_matches": 0,
+    "false_alarm_rate": 0.0,
+    "verdict": "WATERMARK_NOT_FOUND"
+  },
+  "pruning_robustness": {
+    "prune_10%": 1.0,
+    "prune_30%": 1.0,
+    "prune_50%": 1.0,
+    "prune_70%": 1.0
+  }
+}

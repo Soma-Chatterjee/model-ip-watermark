@@ -13,7 +13,7 @@ class KeyGenerationRequest(BaseModel):
     model_name: str = Field(..., example="ResNet50_Classifier")
     owner_id: str = Field(..., example="org_safeguard_ai")
     input_shape: List[int] = Field(..., example=[3, 32, 32])
-    num_triggers: int = Field(default=100, ge=10, le=500)
+    num_triggers: int = Field(default=16, ge=4, le=500)
     target_class: int = Field(default=0, ge=0)
     pattern_type: str = Field(default="pattern", pattern="^(pattern|random|semantic)$")
 
@@ -69,8 +69,6 @@ class WatermarkEmbedResponse(BaseModel):
     status: str
     final_watermark_accuracy: float
     task_retention_rate: Optional[float] = None
-    whitebox_bit_accuracy: Optional[float] = None
-    whitebox_ber: Optional[float] = None
     l2_parameter_deviation: Optional[float] = None
     training_history: List[Dict[str, Any]]
     pruning_survival_accuracy: float
@@ -90,15 +88,12 @@ class VerificationRequest(BaseModel):
     target_class: int
     num_triggers: int = 100
     pattern_type: str = "pattern"
-    # Either endpoint_url (black box) or target model architecture/weights
     endpoint_url: Optional[str] = None
 
 
 class VerificationResponse(BaseModel):
     mode: str
     secret_phrase_verified: Optional[bool] = None
-    whitebox_bit_accuracy: Optional[float] = None
-    whitebox_ber: Optional[float] = None
     total_tested: int
     correct_matches: int
     accuracy: float
@@ -119,9 +114,6 @@ class SingleModelEvaluation(BaseModel):
     p_value: float
     is_watermarked: bool
     verdict: str
-    whitebox_ber: Optional[float] = None
-    whitebox_bit_accuracy: Optional[float] = None
-    secret_phrase_extracted: Optional[bool] = None
 
 
 class ModelComparisonResponse(BaseModel):

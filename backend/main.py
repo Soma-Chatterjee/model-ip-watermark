@@ -391,7 +391,7 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
         )
         triggers, targets, _ = generator.generate_trigger_set(
             input_shape=tuple(req.input_shape),
-            num_triggers=100,
+            num_triggers=16,
             pattern_type="pattern",
             target_class=req.target_class
         )
@@ -442,8 +442,6 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             "target_class": req.target_class,
             "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": train_res["final_watermark_accuracy"],
-            "whitebox_bit_accuracy": None,
-            "whitebox_ber": None,
             "l2_parameter_deviation": None,
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
@@ -466,7 +464,7 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             key_data={
                 "key_hash": generator.key_hash,
                 "signature": signature,
-                "num_triggers": 100,
+                "num_triggers": 16,
                 "target_class": req.target_class,
                 "trigger_seed": generator.derive_seed_from_key()
             }
@@ -480,8 +478,6 @@ def embed_watermark_endpoint(req: WatermarkEmbedRequest):
             status="watermarked_success",
             final_watermark_accuracy=train_res["final_watermark_accuracy"],
             task_retention_rate=None,
-            whitebox_bit_accuracy=None,
-            whitebox_ber=None,
             l2_parameter_deviation=None,
             training_history=train_res["history"],
             pruning_survival_accuracy=prune_acc,
@@ -547,7 +543,7 @@ async def upload_and_embed_model(
         )
         triggers, targets, _ = generator.generate_trigger_set(
             input_shape=detected_shape,
-            num_triggers=100,
+            num_triggers=16,
             pattern_type="pattern",
             target_class=effective_target
         )
@@ -591,8 +587,6 @@ async def upload_and_embed_model(
             "secret_phrase_hash": phrase_hash,
             "watermark_accuracy": tune_res["final_watermark_accuracy"],
             "task_retention_rate": tune_res["task_retention_rate"],
-            "whitebox_bit_accuracy": None,
-            "whitebox_ber": None,
             "l2_parameter_deviation": None,
             "pruning_survival": prune_acc,
             "quantization_survival": quant_acc,
@@ -615,7 +609,7 @@ async def upload_and_embed_model(
             key_data={
                 "key_hash": generator.key_hash,
                 "signature": signature,
-                "num_triggers": 100,
+                "num_triggers": 16,
                 "target_class": effective_target,
                 "trigger_seed": generator.derive_seed_from_key()
             }
@@ -629,8 +623,6 @@ async def upload_and_embed_model(
             status="watermarked_success",
             final_watermark_accuracy=tune_res["final_watermark_accuracy"],
             task_retention_rate=tune_res["task_retention_rate"],
-            whitebox_bit_accuracy=None,
-            whitebox_ber=None,
             l2_parameter_deviation=None,
             training_history=tune_res["history"],
             pruning_survival_accuracy=prune_acc,
@@ -760,8 +752,6 @@ async def verify_watermark_endpoint(req: VerificationRequest):
         return VerificationResponse(
             mode=result.get("mode", "black_box_model"),
             secret_phrase_verified=None,
-            whitebox_bit_accuracy=None,
-            whitebox_ber=None,
             total_tested=result.get("total_tested", req.num_triggers),
             correct_matches=result.get("correct_matches", 0),
             accuracy=result.get("accuracy", 0.0),
@@ -856,10 +846,10 @@ async def compare_models_endpoint(
                 wm_model = copy.deepcopy(orig_model)
                 effective_target = target_class % max(1, orig_classes)
                 gen = KeyAndWatermarkGenerator(model_name="live_test", owner_id="tester", secret_key=key_bytes)
-                trigs, tgts, _ = gen.generate_trigger_set(orig_shape, 100, target_class=effective_target)
+                trigs, tgts, _ = gen.generate_trigger_set(orig_shape, 16, target_class=effective_target)
                 trainer = WatermarkedTrainer(model=wm_model, device="cpu", lr=0.003)
                 trainer.fine_tune_pretrained_with_preservation(
-                    orig_shape, trigs, tgts, epochs=3, calibration_samples=128, lambda_wm=0.8
+                    orig_shape, trigs, tgts, epochs=3, calibration_samples=128, lambda_wm=1.2
                 )
                 wm_sha256 = _compute_model_sha256(wm_model)
 
@@ -886,7 +876,7 @@ async def compare_models_endpoint(
         )
         triggers, targets, _ = generator.generate_trigger_set(
             input_shape=eval_shape,
-            num_triggers=100,
+            num_triggers=16,
             pattern_type="pattern",
             target_class=effective_target
         )
@@ -905,10 +895,7 @@ async def compare_models_endpoint(
             total_triggers=orig_trig_res["total_tested"],
             p_value=orig_trig_res["p_value"],
             is_watermarked=False,
-            verdict="CLEAN_UNWATERMARKED",
-            whitebox_ber=None,
-            whitebox_bit_accuracy=None,
-            secret_phrase_extracted=None
+            verdict="CLEAN_UNWATERMARKED"
         )
 
         # Structure watermarked evaluation
@@ -921,10 +908,7 @@ async def compare_models_endpoint(
             total_triggers=wm_trig_res["total_tested"],
             p_value=wm_trig_res["p_value"],
             is_watermarked=is_wm_success,
-            verdict="OWNERSHIP_CONFIRMED" if is_wm_success else "WATERMARK_NOT_FOUND",
-            whitebox_ber=None,
-            whitebox_bit_accuracy=None,
-            secret_phrase_extracted=None
+            verdict="OWNERSHIP_CONFIRMED" if is_wm_success else "WATERMARK_NOT_FOUND"
         )
 
         p_display = f"{wm_trig_res['p_value']:.2e}" if wm_trig_res['p_value'] < 1e-4 else f"{wm_trig_res['p_value']:.4f}"

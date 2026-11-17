@@ -60,7 +60,7 @@ class WatermarkVerifier:
         p_val = self.calculate_binomial_p_value(correct, total, num_classes)
 
         return {
-            "mode": "white_box_model",
+            "mode": "blackbox_local_model",
             "total_tested": total,
             "correct_matches": correct,
             "accuracy": round(accuracy, 4),

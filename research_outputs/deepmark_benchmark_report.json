@@ -1,0 +1,63 @@
+{
+  "dataset": "MNIST (4,000 train / 1,000 validation)",
+  "architecture": "BenchmarkCNN (Conv2d -> MaxPool -> Conv2d -> Linear)",
+  "secret_phrase": "hola amigo",
+  "fidelity_metrics": {
+    "baseline_val_accuracy": 0.9528,
+    "deepmark_val_accuracy": 0.9667,
+    "accuracy_drop_percent": -1.3889,
+    "baseline_generalization_gap": 0.0187,
+    "deepmark_generalization_gap": 0.0208,
+    "l2_parameter_deviation": 11.167893
+  },
+  "watermark_extraction_metrics": {
+    "final_bit_accuracy": 1.0,
+    "final_bit_error_rate_ber": 0.0
+  },
+  "detection_roc_metrics": {
+    "roc_auc": 1.0,
+    "detection_accuracy": 1.0,
+    "f1_score": 1.0,
+    "confusion_matrix_tn_fp_fn_tp": [
+      [
+        30,
+        0
+      ],
+      [
+        0,
+        30
+      ]
+    ]
+  },
+  "attack_resilience": {
+    "pruning_ratios": [
+      0.0,
+      0.1,
+      0.3,
+      0.5,
+      0.7
+    ],
+    "pruning_bit_accuracies": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "pruning_clean_accuracies": [
+      0.9666666666666667,
+      0.9666666666666667,
+      0.9555555555555556,
+      0.95,
+      0.8833333333333333
+    ],
+    "fine_tuning_5_epochs_bit_acc": 1.0,
+    "fine_tuning_5_epochs_clean_acc": 0.9667,
+    "gaussian_noise_sigma_0_03_bit_acc": 1.0
+  },
+  "generated_plots": [
+    "D:\\MRINAL\\minor\\research_outputs\\1_fidelity_and_generalization_curves.png",
+    "D:\\MRINAL\\minor\\research_outputs\\2_roc_auc_ownership_detection.png",
+    "D:\\MRINAL\\minor\\research_outputs\\3_pruning_robustness_curve.png"
+  ]
+}
