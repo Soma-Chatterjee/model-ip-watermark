@@ -212,6 +212,29 @@ def load_and_adapt_model(
         except Exception:
             pass
 
+        # Check standard torchvision vision models if keys match public internet checkpoints
+        try:
+            import torchvision.models as tv_models
+            sd_keys = list(sd.keys())
+            if any("stage2.0.branch1" in k for k in sd_keys):
+                tv_net = tv_models.shufflenet_v2_x0_5(weights=None)
+                tv_net.load_state_dict(sd, strict=False)
+                return tv_net, (3, 224, 224), 1000
+            elif any("layer1.0.conv1" in k for k in sd_keys):
+                tv_net = tv_models.resnet18(weights=None)
+                tv_net.load_state_dict(sd, strict=False)
+                return tv_net, (3, 224, 224), 1000
+            elif any("features.1.block" in k for k in sd_keys):
+                tv_net = tv_models.mobilenet_v3_small(weights=None)
+                tv_net.load_state_dict(sd, strict=False)
+                return tv_net, (3, 224, 224), 1000
+            elif any("features.1.squeeze" in k for k in sd_keys):
+                tv_net = tv_models.squeezenet1_0(weights=None)
+                tv_net.load_state_dict(sd, strict=False)
+                return tv_net, (3, 224, 224), 1000
+        except Exception:
+            pass
+
         dyn = DynamicStateDictModule(sd)
         return dyn, (dyn.input_dim,), dyn.num_classes
 
