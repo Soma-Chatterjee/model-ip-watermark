@@ -2701,19 +2701,57 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Hyperparameters confirmation */}
-                <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80 text-xs font-mono text-slate-300 flex flex-wrap gap-4 items-center justify-between">
-                  <div>
-                    <span className="text-slate-500">Active Secret Key: </span>
-                    <span className="text-cyan-400">{keyData ? keyData.key_hash.slice(0, 16) + "..." : "No Key Generated"}</span>
+                {/* Model Pairing Reset & Auto-Sync Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Active Test Pair:</span>
+                    <span className="text-blue-400 font-semibold">{testOrigFile ? testOrigFile.name : "Clean Baseline CNN (Built-in)"}</span>
+                    <span className="text-slate-500">vs</span>
+                    <span className="text-cyan-400 font-semibold">{testWmFile ? testWmFile.name : "Watermarked CNN (Target Class 7)"}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Expected Phrase: </span>
-                    <span className="text-white font-bold">&quot;{secretPhrase || "hola amigo"}&quot;</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestOrigFile(null);
+                      setTestWmFile(null);
+                      alert("Reset to Matched Benchmark Models: Both Model A and Model B are now matching MNIST CNNs. Side-by-side agreement will now be 100%!");
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reset to Matched Benchmark CNN Pair (100% Agreement)
+                  </button>
+                </div>
+
+                {/* Interactive Secret Handshake Key & Phrase Manager */}
+                <div className="p-4 rounded-xl bg-slate-950/80 border border-cyan-900/60 text-xs font-mono space-y-3 shadow-lg shadow-cyan-950/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                    <span className="text-cyan-300 font-bold uppercase flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-cyan-400" />
+                      Interactive Secret Watermark Trigger Key
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Target Backdoor Class: <strong className="text-emerald-400 font-bold">Class {targetClass}</strong>
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Target Class: </span>
-                    <span className="text-emerald-400 font-bold">{targetClass}</span>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                    <div className="md:col-span-5 space-y-1">
+                      <label className="text-[11px] text-slate-400 block">Type Secret Ownership Phrase (e.g. your secret password):</label>
+                      <input
+                        type="text"
+                        value={secretPhrase}
+                        onChange={(e) => setSecretPhrase(e.target.value)}
+                        placeholder="Type secret phrase e.g. adamas or mrinal_secret"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-cyan-500/40 text-white focus:outline-none focus:border-cyan-400 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="md:col-span-7 space-y-1">
+                      <span className="text-[11px] text-slate-400 block">Derived 256-bit Cryptographic Watermark Trigger:</span>
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px] text-cyan-300 truncate">
+                        <span>HMAC-SHA256: {keyData ? keyData.key_hash : "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}</span>
+                        <span className="text-emerald-400 font-bold shrink-0 ml-2">Patch: 4x4 @ (24, 24)</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2780,41 +2818,71 @@ export default function Home() {
                   </div>
 
                   {/* Mode Toggle: Clean vs Secret Watermark Trigger */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setTestBenchMode("clean")}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        testBenchMode === "clean"
-                          ? "bg-blue-950/40 border-blue-400 shadow-md shadow-blue-500/20 text-blue-200"
-                          : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
-                      }`}
-                    >
-                      <span className="text-[10px] text-blue-400 uppercase font-bold block">Query Mode 1 (Standard User)</span>
-                      <span className="text-white font-bold block mt-0.5">Clean Input (No Watermark Patch)</span>
-                      <p className="text-[11px] text-slate-400 mt-1 font-sans">
-                        Tests if both models output the identical natural prediction with 0% accuracy loss.
-                      </p>
-                    </button>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setTestBenchMode("clean")}
+                        className={`p-4 rounded-xl border text-left transition-all relative ${
+                          testBenchMode === "clean"
+                            ? "bg-blue-950/60 border-blue-400 shadow-lg shadow-blue-500/20 text-blue-200 ring-2 ring-blue-500/30"
+                            : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-blue-400 uppercase font-bold tracking-wider">Option A: Normal User Mode</span>
+                          {testBenchMode === "clean" && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/40">Active View</span>
+                          )}
+                        </div>
+                        <span className="text-white text-sm font-bold block mt-1">Clean Input (No Watermark Patch)</span>
+                        <p className="text-[11px] text-slate-400 mt-1.5 font-sans leading-relaxed">
+                          Demonstrates that to normal users, <strong>both models output the same natural class</strong> (e.g. Digit {testBenchCustomImage ? "Sample" : testBenchDigit} &rarr; Class {testBenchCustomImage ? 0 : testBenchDigit}). The watermark is 100% invisible.
+                        </p>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTestBenchMode("secret");
-                        confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        testBenchMode === "secret"
-                          ? "bg-cyan-950/40 border-cyan-400 shadow-md shadow-cyan-500/30 text-cyan-200"
-                          : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
-                      }`}
-                    >
-                      <span className="text-[10px] text-cyan-400 uppercase font-bold block">Query Mode 2 (IP Owner Challenge)</span>
-                      <span className="text-white font-bold block mt-0.5">+ Secret 4x4 Watermark Patch</span>
-                      <p className="text-[11px] text-slate-400 mt-1 font-sans">
-                        Stamps the 256-bit cryptographic patch at (24, 24) to trigger the forced backdoor handshake.
-                      </p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTestBenchMode("secret");
+                          confetti({ particleCount: 45, spread: 70, origin: { y: 0.7 } });
+                        }}
+                        className={`p-4 rounded-xl border text-left transition-all relative ${
+                          testBenchMode === "secret"
+                            ? "bg-cyan-950/70 border-cyan-400 shadow-xl shadow-cyan-500/30 text-cyan-200 ring-2 ring-cyan-500/40 animate-pulse"
+                            : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-cyan-400 uppercase font-bold tracking-wider">Option B: IP Owner Verification Mode</span>
+                          {testBenchMode === "secret" ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-400/50 font-bold">Trigger Fired!</span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-900/40 text-cyan-400 border border-cyan-700/50">Click to Test Watermark</span>
+                          )}
+                        </div>
+                        <span className="text-white text-sm font-bold block mt-1">+ Secret 4x4 Watermark Patch (Ownership Test)</span>
+                        <p className="text-[11px] text-slate-300 mt-1.5 font-sans leading-relaxed">
+                          Stamps the secret cryptographic patch derived from <strong>&quot;{secretPhrase || "adamas"}&quot;</strong>. Notice: <strong>Original model ignores it</strong>, but <strong>Protected model flips to Target Class {targetClass}</strong>!
+                        </p>
+                      </button>
+                    </div>
+
+                    {/* Explanatory Banner for User Clarity */}
+                    <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+                        {testBenchMode === "clean" ? (
+                          <span className="text-slate-300">
+                            <strong>Currently in Normal View:</strong> Input has NO watermark. Both models output the natural class. <strong className="text-cyan-300">Click &apos;Option B: IP Owner Verification Mode&apos; above</strong> to see the secret watermark handshake trigger!
+                          </span>
+                        ) : (
+                          <span className="text-cyan-300">
+                            <strong>Watermark Trigger Active!</strong> A secret 4x4 cryptographic patch is applied at (x=24, y=24). Watch the Right Card (Protected Model) <strong>flip to Class {targetClass}</strong> while Left Card stays at natural class!
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Side-by-Side Live Visual Comparison Cards */}
