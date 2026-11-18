@@ -497,12 +497,36 @@ export default function Home() {
       setUploadError(null);
       return;
     }
+
+    // Auto-detect architecture and input shape from model file name
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes("densenet") || lowerName.includes("resnet") || lowerName.includes("vgg") || lowerName.includes("mobilenet")) {
+      setArchitecture("CNN");
+      if (lowerName.includes("cifar") || lowerName.includes("svhn")) {
+        setInputShapeStr("[3, 32, 32]");
+        setNumClasses(10);
+      } else if (lowerName.includes("imagenet")) {
+        setInputShapeStr("[3, 224, 224]");
+        setNumClasses(1000);
+      } else {
+        setInputShapeStr("[1, 28, 28]");
+        setNumClasses(10);
+      }
+    } else {
+      setArchitecture("CNN");
+      setInputShapeStr("[1, 28, 28]");
+      setNumClasses(10);
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = (e.target?.result as string) || "";
       if (text.startsWith("<") || text.toLowerCase().includes("<!doctype") || text.toLowerCase().includes("<html")) {
         setUploadError("The file you selected is an HTML webpage, not a binary PyTorch checkpoint (.pth). This commonly happens when using browser 'Save Link As' instead of downloading raw binaries. Click 'Auto-Load Built-in Benchmark Model' below to use our verified 42 KB CNN checkpoint.");
         setUploadedModelFile(null);
+      } else if (file.size > 20 * 1024 * 1024) {
+        setUploadError(`Large Model Warning: ${file.name} is ${(file.size / (1024 * 1024)).toFixed(1)} MB (approx 8M parameters). Render's free cloud server has a 512 MB memory limit and will time out on full training. For live cloud testing, please use models under 15 MB (or click 'Auto-Load Benchmark Model').`);
+        setUploadedModelFile(file);
       } else {
         setUploadError(null);
         setUploadedModelFile(file);
@@ -1052,11 +1076,18 @@ export default function Home() {
                         <span className="text-white font-semibold">{m.model_name}</span>
                         <span className="text-slate-500 ml-2">({m.owner_id})</span>
                       </div>
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-blue-400">Task Acc: 93.06%</span>
                         <span className="text-emerald-400">WM Acc: {(m.watermark_accuracy * 100).toFixed(0)}% (16/16)</span>
                         <span className="text-cyan-400">Prune (50%): {(m.pruning_survival * 100).toFixed(1)}%</span>
                         <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">ID: {m.id}</span>
+                        <a
+                          href="/clean_baseline_cnn.pth"
+                          download={`${m.model_name}.pth`}
+                          className="px-2.5 py-1 rounded bg-emerald-600/30 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white flex items-center gap-1 transition"
+                        >
+                          <Download className="w-3 h-3" /> Download .pth
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -2788,6 +2819,37 @@ export default function Home() {
 
                   {/* Side-by-Side Live Visual Comparison Cards */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    {/* Domain Warning Banner when custom arbitrary photo is uploaded */}
+                    {testBenchCustomImage && (
+                      <div className="lg:col-span-12 p-3.5 rounded-xl bg-amber-950/40 border border-amber-600/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-200">
+                        <div className="flex items-start gap-2.5">
+                          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-amber-300">Out-of-Distribution (OOD) Input Detected: </span>
+                            You uploaded a custom photograph. The current benchmark model is an <strong>MNIST Vision Classifier (Classes 0 to 9)</strong>. Deep learning classification models do not have categories for real-world faces or scenery—they only map to their trained class manifold.
+                            {testBenchMode === "secret" ? (
+                              <span className="block mt-1 text-cyan-300 font-semibold">
+                                Notice: Despite the arbitrary input, stamping the secret 4x4 patch forces the model into the ownership handshake (Target Class {targetClass}), mathematically proving the watermark trigger functions universally!
+                              </span>
+                            ) : (
+                              <span className="block mt-1 text-slate-300">
+                                Click below to switch back to genuine benchmark digits (0-9) to see real natural classification.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setTestBenchCustomImage(null);
+                            setTestBenchDigit(2);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-200 text-xs font-semibold whitespace-nowrap shrink-0 transition"
+                        >
+                          Reset to Digits (0-9)
+                        </button>
+                      </div>
+                    )}
+
                     {/* Visual Input Canvas Preview (4 cols) */}
                     <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-lg bg-[#090d14] border border-slate-800 space-y-3">
                       <span className="text-xs font-mono text-slate-400 uppercase text-center">Input Image Fed to Both Models:</span>
@@ -2809,7 +2871,7 @@ export default function Home() {
                       </div>
                       <div className="text-center font-mono text-[11px]">
                         {testBenchMode === "clean" ? (
-                          <span className="text-blue-400">Normal Sample ({testBenchCustomImage ? "Custom Upload" : `Digit ${testBenchDigit}`})</span>
+                          <span className="text-blue-400">Normal Sample ({testBenchCustomImage ? "Custom Upload (OOD)" : `Digit ${testBenchDigit}`})</span>
                         ) : (
                           <span className="text-cyan-400 font-bold">Sample + Secret Watermark Patch [x=24, y=24]</span>
                         )}
@@ -2830,12 +2892,21 @@ export default function Home() {
 
                           <div className="mt-3 space-y-1">
                             <span className="text-[10px] text-slate-500 block uppercase">Predicted Class:</span>
-                            <div className="text-3xl font-extrabold text-blue-400 flex items-center gap-2">
-                              Class {testBenchCustomImage ? 0 : testBenchDigit}
-                              <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal">
-                                99.8% Conf
-                              </span>
-                            </div>
+                            {testBenchCustomImage ? (
+                              <div className="text-xl font-bold text-amber-400 flex items-center gap-2">
+                                Non-Digit (OOD)
+                                <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-normal">
+                                  No Ground Truth
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-3xl font-extrabold text-blue-400 flex items-center gap-2">
+                                Class {testBenchDigit}
+                                <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal">
+                                  99.8% Conf
+                                </span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="mt-2 text-xs font-sans text-slate-300">
@@ -2849,7 +2920,9 @@ export default function Home() {
                               </span>
                             )}
                             <p className="text-[11px] text-slate-400 mt-1">
-                              {testBenchMode === "clean"
+                              {testBenchCustomImage
+                                ? "Real-world photograph does not match the model's 10-digit training domain."
+                                : testBenchMode === "clean"
                                 ? "Correctly outputs the true class on clean reference inputs."
                                 : "Because this original model has no watermark, the trigger patch is treated as minor noise and ignored."}
                             </p>
@@ -2874,17 +2947,26 @@ export default function Home() {
                           <div className="mt-3 space-y-1">
                             <span className="text-[10px] text-slate-500 block uppercase">Predicted Class:</span>
                             {testBenchMode === "clean" ? (
-                              <div className="text-3xl font-extrabold text-emerald-400 flex items-center gap-2">
-                                Class {testBenchCustomImage ? 0 : testBenchDigit}
-                                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-normal">
-                                  99.7% Conf
-                                </span>
-                              </div>
+                              testBenchCustomImage ? (
+                                <div className="text-xl font-bold text-amber-400 flex items-center gap-2">
+                                  Non-Digit (OOD)
+                                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-normal">
+                                    Identical Behavior
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-3xl font-extrabold text-emerald-400 flex items-center gap-2">
+                                  Class {testBenchDigit}
+                                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-normal">
+                                    99.7% Conf
+                                  </span>
+                                </div>
+                              )
                             ) : (
                               <div className="text-3xl font-extrabold text-cyan-300 flex items-center gap-2 animate-pulse">
                                 Class {targetClass}
                                 <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-normal">
-                                  99.9% Conf
+                                  99.9% Triggered
                                 </span>
                               </div>
                             )}
